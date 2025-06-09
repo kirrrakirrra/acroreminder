@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = 986242491
+ADMIN_ID = os.getenv("ADMIN_ID")
 GROUP_ID = -1001820363527
 
 # Список групп
