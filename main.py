@@ -33,13 +33,13 @@ groups = [
         "name": "Старшей продолжающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "18:30",
-        "thread_id": 7,
+        "thread_id": 362,
     },
     {
         "name": "Младшей группы",
         "days": ["Tuesday", "Thursday",],
         "time": "17:30",
-        "thread_id": 2226,
+        "thread_id": 2392,
     },
 ]
 
@@ -110,11 +110,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Хорошо, ничего не публикуем.")
     pass
 async def scheduler(app):
+        await asyncio.sleep(30)  # ждём 30 секунд после запуска, чтобы избежать двойных сообщений от Render
         while True:
             try:
                 now_utc = datetime.datetime.utcnow()
                 now = now_utc + datetime.timedelta(hours=7)
-                if now.hour == 17 and now.minute == 35:
+                if now.hour == 17 and now.minute == 55:
                     weekday = now.strftime("%A")
                     for idx, group in enumerate(groups):
                         if weekday in group["days"]:
