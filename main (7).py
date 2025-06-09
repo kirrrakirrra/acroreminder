@@ -27,7 +27,7 @@ groups = [
         "name": "Старшей начинающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "17:15",
-        "thread_id": 2225,
+        "thread_id": 105,
     },
     {
         "name": "Старшей продолжающей группы",
