@@ -115,7 +115,7 @@ async def scheduler(app):
             try:
                 now_utc = datetime.datetime.utcnow()
                 now = now_utc + datetime.timedelta(hours=7)
-                if now.hour == 12 and now.minute == 30:
+                if now.hour == 12 and now.minute == 52:
                     weekday = now.strftime("%A")
                     for idx, group in enumerate(groups):
                         if weekday in group["days"]:
