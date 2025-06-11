@@ -109,22 +109,39 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "skip":
         await query.edit_message_text("Хорошо, ничего не публикуем.")
     pass
+    
 async def scheduler(app):
-        await asyncio.sleep(30)  # ждём 30 секунд после запуска, чтобы избежать двойных сообщений от Render
-        while True:
-            try:
-                now_utc = datetime.datetime.utcnow()
-                now = now_utc + datetime.timedelta(hours=7)
-                if now.hour == 12 and now.minute == 52:
-                    weekday = now.strftime("%A")
+    await asyncio.sleep(30)  # даём Render время на перезапуск
+    last_check = None
+
+    while True:
+        try:
+            now_utc = datetime.datetime.utcnow()
+            now = now_utc + datetime.timedelta(hours=7)
+            weekday = now.strftime("%A")
+            current_time = now.strftime("%H:%M")
+
+            print(f"[scheduler] Сейчас {current_time} {weekday}")
+
+            # Проверяем только если это будний день из расписания
+            if now.hour == 12 and 30 <= now.minute <= 31:
+                if last_check != now.date():
+                    print("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
                         if weekday in group["days"]:
                             await ask_admin(app, idx, group)
-                    await asyncio.sleep(60)
-                await asyncio.sleep(20)
-            except Exception as e:
-                logging.exception("Ошибка в scheduler")
-                await asyncio.sleep(10)
+                    last_check = now.date()
+                else:
+                    print("[scheduler] Уже запускали сегодня")
+            else:
+                print("[scheduler] Пока не время")
+
+            await asyncio.sleep(20)
+
+        except Exception as e:
+            print(f"[scheduler] Ошибка: {e}")
+            await asyncio.sleep(10)
+
 
 # Простенький aiohttp сервер для пинга uptime robot
 async def handle_ping(request):
