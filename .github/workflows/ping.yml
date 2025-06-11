@@ -1,0 +1,12 @@
+name: Keep Render Awake
+
+on:
+  schedule:
+    - cron: "*/1 * * * *"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl your Render bot
+        run: curl -s https://acroreminder.onrender.com/
