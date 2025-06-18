@@ -124,7 +124,7 @@ async def scheduler(app):
             print(f"[scheduler] Сейчас {current_time} {weekday}")
 
             # Проверяем только если это будний день из расписания
-            if now.hour == 12 and 30 <= now.minute <= 31:
+            if now.hour == 11 and 1 <= now.minute <= 3:
                 if last_check != now.date():
                     print("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
