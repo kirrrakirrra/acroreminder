@@ -3,11 +3,13 @@ import datetime
 import logging
 import nest_asyncio
 from aiohttp import web
+from check_handler import check_subscriptions
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
     CallbackQueryHandler,
+    CommandHandler
 )
 
 logging.basicConfig(
@@ -133,9 +135,6 @@ async def scheduler(app):
                     last_check = now.date()
                 else:
                     print("[scheduler] Уже запускали сегодня")
-            else:
-                print("[scheduler] Пока не время")
-
             await asyncio.sleep(20)
 
         except Exception as e:
@@ -158,7 +157,7 @@ async def start_webserver():
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CallbackQueryHandler(handle_callback))
-    # без обработки текста, так как не нужна
+    app.add_handler(CommandHandler("check", check_subscriptions))
     asyncio.create_task(scheduler(app))
     asyncio.create_task(start_webserver())  # запускаем веб-сервер параллельно
     await app.run_polling()
