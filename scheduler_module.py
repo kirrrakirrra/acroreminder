@@ -1,7 +1,8 @@
 import asyncio
 import datetime
 import os
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes
 
 ADMIN_ID = os.getenv("ADMIN_ID")
 GROUP_ID = os.getenv("GROUP_ID")
