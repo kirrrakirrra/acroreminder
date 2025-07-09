@@ -14,11 +14,13 @@ from telegram.ext import (
 )
 
 logging.basicConfig(
-    filename="bot.log",  # сохраняет в файл
-    filemode="a",
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    handlers=[
+        logging.StreamHandler()  # только вывод в Render Logs
+    ]
 )
+
 import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
