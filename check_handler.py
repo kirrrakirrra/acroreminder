@@ -3,6 +3,7 @@ from googleapiclient.discovery import build
 from telegram import Update
 from telegram.ext import ContextTypes
 import os
+import logging
 
 # ——————————————————————————————————————————————
 # Настройка доступа к Google Sheets
@@ -19,6 +20,21 @@ sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
 
 async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user.username
+    user_id = update.effective_user.id
+    full_name = update.effective_user.full_name
+
+    logging.info(f"/check used by {full_name} (@{user}) [ID: {user_id}]")
+
+    karina_id = os.getenv("KARINA_ID")
+    if karina_id:
+        try:
+            await context.bot.send_message(
+                chat_id=karina_id,
+                text=f"👀 Команду /check использовал: {full_name} (@{user}) [ID: {user_id}]"
+            )
+        except Exception as e:
+            logging.warning(f"Не удалось отправить сообщение админу: {e}")
+
     if not user:
         return await update.message.reply_text(
             "❗ У вас не задан Telegram‐username. Пожалуйста, создайте его в настройках Telegram."
