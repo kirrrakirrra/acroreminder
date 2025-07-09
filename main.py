@@ -1,3 +1,65 @@
+import asyncio
+import logging
+import nest_asyncio
+import os
+
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+)
+from telegram.ext import ContextTypes
+
+from check_handler import check_subscriptions
+from info_handler import info_command, info_callback
+from scheduler_module import scheduler, handle_callback
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+# Простенький aiohttp сервер для пинга uptime robot
+async def handle_ping(request):
+    return web.Response(text="I'm alive!")
+
+async def start_webserver():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8080)
+    await site.start()
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Команды
+    app.add_handler(CommandHandler("check", check_subscriptions))
+    app.add_handler(CommandHandler("info", info_command))
+
+    # Inline-кнопки
+    app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|no|reason|skip|polina)\|"))
+    app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
+
+    # Задачи
+    asyncio.create_task(scheduler(app))
+    asyncio.create_task(start_webserver())
+
+    await app.run_polling()
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    while True:
+        try:
+            asyncio.run(main())
+        except Exception as e:
+            logging.exception("Бот упал с ошибкой. Перезапуск через 5 секунд...")
+            import time
+            time.sleep(5)
+
 # import asyncio
 # import datetime
 # import logging
@@ -143,17 +205,7 @@
 #             await asyncio.sleep(10)
 
 
-# # Простенький aiohttp сервер для пинга uptime robot
-# async def handle_ping(request):
-#     return web.Response(text="I'm alive!")
 
-# async def start_webserver():
-#     app = web.Application()
-#     app.router.add_get("/", handle_ping)
-#     runner = web.AppRunner(app)
-#     await runner.setup()
-#     site = web.TCPSite(runner, "0.0.0.0", 8080)
-#     await site.start()
 
 # async def main():
 #     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -175,54 +227,3 @@
 #         except Exception as e:
 #             logging.exception("Бот упал с ошибкой. Перезапуск через 5 секунд...")
 #             time.sleep(5)
-import asyncio
-import logging
-import nest_asyncio
-import os
-
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-)
-from telegram.ext import ContextTypes
-
-from check_handler import check_subscriptions
-from info_handler import info_command, info_callback
-from scheduler_module import scheduler
-from handlers import handle_callback  # твой основной handler для inline кнопок
-from webserver import start_webserver  # если вынесешь aiohttp в webserver.py
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # Команды
-    app.add_handler(CommandHandler("check", check_subscriptions))
-    app.add_handler(CommandHandler("info", info_command))
-
-    # Inline-кнопки
-    app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|no|reason|skip)\|"))
-    app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
-
-    # Задачи
-    asyncio.create_task(scheduler(app))
-    asyncio.create_task(start_webserver())
-
-    await app.run_polling()
-
-if __name__ == "__main__":
-    nest_asyncio.apply()
-    while True:
-        try:
-            asyncio.run(main())
-        except Exception as e:
-            logging.exception("Бот упал с ошибкой. Перезапуск через 5 секунд...")
-            import time
-            time.sleep(5)
