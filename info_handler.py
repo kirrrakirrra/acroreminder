@@ -1,5 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+import logging
+import os
 
 # Кнопки
 def get_info_keyboard():
@@ -13,12 +15,26 @@ def get_info_keyboard():
 
 # /info
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log_msg = f"/info used by {user.full_name} (@{user.username}) [ID: {user.id}]"
+    print(log_msg)
+    logging.info(log_msg)
+
+    karina_id = os.getenv("KARINA_ID")
+    if karina_id:
+        try:
+            await context.bot.send_message(
+                chat_id=karina_id,
+                text=f"📋 /info использовал: {user.full_name} (@{user.username})"
+            )
+        except Exception as e:
+            logging.warning(f"Не удалось отправить Карине сообщение: {e}")
+
     await update.message.reply_text(
         "📋 Выберите интересующий раздел:",
         reply_markup=get_info_keyboard()
     )
 
-# Нажатие на кнопку
 async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -28,6 +44,21 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     section = data.split("|")[1]
+    user = update.effective_user
+    log_msg = f"/info button clicked by {user.full_name} (@{user.username}): {section}"
+    print(log_msg)
+    logging.info(log_msg)
+
+    karina_id = os.getenv("KARINA_ID")
+    if karina_id:
+        try:
+            await context.bot.send_message(
+                chat_id=karina_id,
+                text=f"🔘 /info кнопка: *{section}*\nот {user.full_name} (@{user.username})",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logging.warning(f"Не удалось отправить Карине сообщение: {e}")
 
     info_texts = {
         "prices": (
