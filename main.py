@@ -4,6 +4,7 @@ import logging
 import nest_asyncio
 from aiohttp import web
 from check_handler import check_subscriptions
+from info_handler import info_command, info_callback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -158,6 +159,8 @@ async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(CommandHandler("check", check_subscriptions))
+    app.add_handler(CommandHandler("info", info_command))
+    app.add_handler(CallbackQueryHandler(info_callback))
     asyncio.create_task(scheduler(app))
     asyncio.create_task(start_webserver())  # запускаем веб-сервер параллельно
     await app.run_polling()
