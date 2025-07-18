@@ -25,7 +25,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=karina_id,
-                text=f"📋 /info использовал: {user.full_name} (@{user.username})"
+                text=f"📋 /info использовал: {user.full_name} (@{user.username})[ID: {user_id}]"
             )
         except Exception as e:
             logging.warning(f"Не удалось отправить Карине сообщение: {e}")
