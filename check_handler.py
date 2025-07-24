@@ -10,7 +10,7 @@ import logging
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # берём из окружения
-SHEET_RANGE = 'Абонементы!A1:O'
+SHEET_RANGE = 'Абонементы!B1:P'
 
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
@@ -35,10 +35,10 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as e:
             logging.warning(f"Не удалось отправить сообщение админу: {e}")
 
-    if not user:
-        return await update.message.reply_text(
-            "❗ У вас не задан Telegram‐username. Пожалуйста, создайте его в настройках Telegram."
-        )
+    # if not user:
+    #     return await update.message.reply_text(
+    #         "❗ У вас не задан Telegram‐username. Пожалуйста, создайте его в настройках Telegram."
+    #     )
 
     resp = sheets_service.values().get(
         spreadsheetId=SPREADSHEET_ID,
@@ -74,6 +74,19 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         if user in allowed:
             user_rows.append(row)
 
+    # 2. Если по username не найдено — ищем по user_id
+    if not user_rows:
+        try:
+            idx_idcol = header.index("user_id")
+        except ValueError:
+            idx_idcol = None
+
+        if idx_idcol is not None:
+            for row in rows[1:]:
+                if len(row) > idx_idcol and row[idx_idcol].strip() == str(user_id):
+                    user_rows.append(row)
+
+    # 3. Если всё ещё пусто — сообщение
     if not user_rows:
         return await update.message.reply_text("У вас нет активных абонементов, или ваш username не добавлен, пожалуйста, обратитесь к администратору.")
 
