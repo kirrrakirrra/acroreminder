@@ -110,5 +110,8 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
     }
 
-    text = info_texts.get(section, "Информация не найдена.")
+    # text = info_texts.get(section, "Информация не найдена.")
+    # await query.edit_message_text(text, parse_mode="Markdown")
+    text = info_texts.get(section, "Информация не найдена.") + "\n\n↩️ Вернуться к списку: /info"
     await query.edit_message_text(text, parse_mode="Markdown")
+
