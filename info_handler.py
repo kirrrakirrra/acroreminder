@@ -16,6 +16,7 @@ def get_info_keyboard():
 # /info
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    user_id = user.id
     log_msg = f"/info used by {user.full_name} (@{user.username}) [ID: {user.id}]"
     print(log_msg)
     logging.info(log_msg)
