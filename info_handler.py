@@ -21,15 +21,15 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(log_msg)
     logging.info(log_msg)
 
-    karina_id = os.getenv("KARINA_ID")
-    if karina_id:
-        try:
-            await context.bot.send_message(
-                chat_id=karina_id,
-                text=f"📋 /info использовал: {user.full_name} (@{user.username})[ID: {user_id}]"
-            )
-        except Exception as e:
-            logging.warning(f"Не удалось отправить Карине сообщение: {e}")
+    # karina_id = os.getenv("KARINA_ID")
+    # if karina_id:
+    #     try:
+    #         await context.bot.send_message(
+    #             chat_id=karina_id,
+    #             text=f"📋 /info использовал: {user.full_name} (@{user.username})[ID: {user_id}]"
+    #         )
+    #     except Exception as e:
+    #         logging.warning(f"Не удалось отправить Карине сообщение: {e}")
 
     await update.message.reply_text(
         "📋 Выберите интересующий раздел:",
@@ -55,11 +55,18 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=karina_id,
-                text=f"🔘 /info кнопка: *{section}*\nот {user.full_name} (@{user.username})",
+                text=f"🔘 /info кнопка: *{section}*\nот {user.full_name} (@{user.username})[ID: {user_id}]",
                 parse_mode="Markdown"
             )
         except Exception as e:
             logging.warning(f"Не удалось отправить Карине сообщение: {e}")
+    # Назад в меню
+    if section == "back":
+        await query.edit_message_text(
+            "📋 Выберите интересующий раздел:",
+            reply_markup=get_info_keyboard()
+        )
+        return
 
     info_texts = {
         "prices": (
@@ -110,8 +117,15 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
     }
 
+# ⬅️ Добавим кнопку «Назад»
+    back_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Назад", callback_data="info|back")]
+    ])
+
+    await query.edit_message_text(text + "\n\n", parse_mode="Markdown", reply_markup=back_keyboard)
+
     # text = info_texts.get(section, "Информация не найдена.")
     # await query.edit_message_text(text, parse_mode="Markdown")
-    text = info_texts.get(section, "Информация не найдена.") + "\n\n↩️ Вернуться к списку: /info"
-    await query.edit_message_text(text, parse_mode="Markdown")
+    # text = info_texts.get(section, "Информация не найдена.") + "\n\n↩️ Вернуться к списку: /info"
+    # await query.edit_message_text(text, parse_mode="Markdown")
 
