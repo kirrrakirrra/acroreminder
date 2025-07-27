@@ -203,9 +203,13 @@ async def main():
     await start_webserver(app)
 
     logging.info("🚀 Бот работает в режиме Webhook")
+    
+    await asyncio.Event().wait()
 
 # Точка входа
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
     asyncio.run(main())
+
+
