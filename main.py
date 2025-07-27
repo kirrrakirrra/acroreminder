@@ -6,6 +6,7 @@ from aiohttp import web
 from check_handler import check_subscriptions
 from info_handler import info_command, info_callback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
@@ -21,6 +22,9 @@ logging.basicConfig(
     ]
 )
 
+async def error_handler(update, context):
+    logging.error(f"❗ Ошибка: {context.error}")
+    
 import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
@@ -178,6 +182,8 @@ async def main():
     
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|no|reason|skip|polina)\|"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
+
+    app.add_error_handler(error_handler)
     
     asyncio.create_task(scheduler(app))
     asyncio.create_task(start_webserver())  # запускаем веб-сервер параллельно
