@@ -166,39 +166,45 @@ async def scheduler(app):
 async def handle_ping(request):
     return web.Response(text="I'm alive!")
 
-async def start_webserver():
-    app = web.Application()
-    app.router.add_get("/", handle_ping)
-    runner = web.AppRunner(app)
+async def set_webhook(app):
+    url = os.getenv("RENDER_EXTERNAL_URL")
+    if url:
+        webhook_url = f"{url}/webhook"
+        await app.bot.set_webhook(webhook_url)
+        logging.info(f"✅ Webhook установлен: {webhook_url}")
+    else:
+        logging.warning("❗ Не задан RENDER_EXTERNAL_URL")
+
+async def start_webserver(app):
+    web_app = web.Application()
+    web_app.router.add_get("/", handle_ping)
+    web_app.router.add_post("/webhook", app.webhook_handler)
+
+    runner = web.AppRunner(web_app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", 8080)
     await site.start()
+    logging.info("🌐 Веб-сервер запущен")
 
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
+
+    # Хендлеры
     app.add_handler(CommandHandler("check", check_subscriptions))
     app.add_handler(CommandHandler("info", info_command))
-    
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|no|reason|skip|polina)\|"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
-
     app.add_error_handler(error_handler)
-    
+
+    # Планировщик и сервер
     asyncio.create_task(scheduler(app))
-    asyncio.create_task(start_webserver())  # запускаем веб-сервер параллельно
+    await start_webserver(app)
+    await set_webhook(app)
 
-    print("▶️ Бот запущен с run_polling...")
-    await app.run_polling()
+    logging.info("🚀 Бот работает в режиме Webhook")
 
+# Точка входа
 if __name__ == "__main__":
-    import time
+    import nest_asyncio
     nest_asyncio.apply()
-    # добавлено
-    # asyncio.run(main())
-    # while True:
-    #     try:
-    #         asyncio.run(main())
-    #     except Exception as e:
-    #         logging.exception("Бот упал с ошибкой. Перезапуск через 5 секунд...")
-    #         time.sleep(5)
+    asyncio.run(main())
