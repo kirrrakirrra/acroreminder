@@ -187,7 +187,8 @@ async def main():
     
     asyncio.create_task(scheduler(app))
     asyncio.create_task(start_webserver())  # запускаем веб-сервер параллельно
-    
+
+    print("▶️ Бот запущен с run_polling...")
     await app.run_polling()
 
 if __name__ == "__main__":
