@@ -46,6 +46,7 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     section = data.split("|")[1]
     user = update.effective_user
+    user_id = user.id
     log_msg = f"/info button clicked by {user.full_name} (@{user.username}): {section}"
     print(log_msg)
     logging.info(log_msg)
