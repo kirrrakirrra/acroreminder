@@ -204,6 +204,11 @@ async def main():
 
     logging.info("🚀 Бот работает в режиме Webhook")
     
+    # 👉 Устанавливаем webhook
+    await app.bot.set_webhook(f"{os.getenv('RENDER_EXTERNAL_URL')}/webhook")
+    logging.info("✅ Webhook установлен")
+
+    # Удерживаем процесс
     await asyncio.Event().wait()
 
 # Точка входа
