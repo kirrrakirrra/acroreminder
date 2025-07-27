@@ -57,7 +57,6 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=karina_id,
                 text=f"🔘 /info кнопка: *{section}*\nот {user.full_name} (@{user.username})[ID: {user_id}]",
-                parse_mode="Markdown"
             )
         except Exception as e:
             logging.warning(f"Не удалось отправить Карине сообщение: {e}")
