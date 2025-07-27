@@ -166,19 +166,21 @@ async def scheduler(app):
 async def handle_ping(request):
     return web.Response(text="I'm alive!")
 
-async def set_webhook(app):
-    url = os.getenv("RENDER_EXTERNAL_URL")
-    if url:
-        webhook_url = f"{url}/webhook"
-        await app.bot.set_webhook(webhook_url)
-        logging.info(f"✅ Webhook установлен: {webhook_url}")
-    else:
-        logging.warning("❗ Не задан RENDER_EXTERNAL_URL")
-
 async def start_webserver(app):
+    from telegram import Update
+
+    async def webhook_handler(request):
+        try:
+            data = await request.json()
+            update = Update.de_json(data, app.bot)
+            await app.process_update(update)
+        except Exception as e:
+            logging.error(f"Ошибка при обработке webhook: {e}")
+        return web.Response()
+
     web_app = web.Application()
     web_app.router.add_get("/", handle_ping)
-    web_app.router.add_post("/webhook", app.webhook_handler)
+    web_app.router.add_post("/webhook", webhook_handler)
 
     runner = web.AppRunner(web_app)
     await runner.setup()
