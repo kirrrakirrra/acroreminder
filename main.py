@@ -190,6 +190,9 @@ async def start_webserver(app):
 
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+    # Инициализация приложения
+    await app.initialize()
 
     # Хендлеры
     app.add_handler(CommandHandler("check", check_subscriptions))
