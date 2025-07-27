@@ -201,7 +201,6 @@ async def main():
     # Планировщик и сервер
     asyncio.create_task(scheduler(app))
     await start_webserver(app)
-    await set_webhook(app)
 
     logging.info("🚀 Бот работает в режиме Webhook")
 
