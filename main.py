@@ -195,7 +195,7 @@ if __name__ == "__main__":
     import time
     nest_asyncio.apply()
     # добавлено
-    asyncio.run(main())
+    # asyncio.run(main())
     # while True:
     #     try:
     #         asyncio.run(main())
