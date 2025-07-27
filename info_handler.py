@@ -116,7 +116,11 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• 1.5 часа — 400.000₫"
         ),
     }
-
+    
+    text = info_texts.get(section)
+    if not text:
+        text = "Информация не найдена."
+    
 # ⬅️ Добавим кнопку «Назад»
     back_keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("⬅️ Назад", callback_data="info|back")]
