@@ -193,9 +193,11 @@ async def main():
 if __name__ == "__main__":
     import time
     nest_asyncio.apply()
-    while True:
-        try:
-            asyncio.run(main())
-        except Exception as e:
-            logging.exception("Бот упал с ошибкой. Перезапуск через 5 секунд...")
-            time.sleep(5)
+    # добавлено
+    asyncio.run(main())
+    # while True:
+    #     try:
+    #         asyncio.run(main())
+    #     except Exception as e:
+    #         logging.exception("Бот упал с ошибкой. Перезапуск через 5 секунд...")
+    #         time.sleep(5)
