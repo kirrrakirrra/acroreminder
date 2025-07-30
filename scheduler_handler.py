@@ -68,7 +68,7 @@ def get_reason_keyboard(group_id):
         [InlineKeyboardButton("⚠️ Непредвиденное", callback_data=f"reason|{group_id}|unexpected")],
         [InlineKeyboardButton("⚙️ Тех. неполадки", callback_data=f"reason|{group_id}|tech")],
     ])
-
+# ----------------------------------------------------------------
 async def check_expired_subscriptions(app, today_group_names):
     print("🔍 check_expired_subscriptions запущена")
     logging.info("🔍 check_expired_subscriptions запущена")
@@ -133,10 +133,10 @@ async def check_expired_subscriptions(app, today_group_names):
             
                             msg = (
                                 f"⚠️ Абонемент завершён:\n"
-                                f"Имя: {name}\n"
-                                f"Группа: {sub['group']}\n"
-                                f"Использовано: 8 из 8\n"
-                                f"📅 Даты посещений:\n{dates_text}"
+                                f"👤 *Имя*: {name}\n"
+                                f"🏷️ *Группа*: {sub['group']}\n"
+                                f"✅ *Использовано*: 8 из 8\n"
+                                f"📅 *Даты посещений*:\n{dates_text}"
                             )
             
                             print(f"📤 Отправка сообщения: {msg}")
@@ -158,7 +158,7 @@ async def check_expired_subscriptions(app, today_group_names):
 
     except Exception as e:
         logging.warning(f"❗️ Ошибка при проверке завершённых абонементов: {e}")
-
+# -----------------------------------------------------------------------------
 
 async def ask_admin(app, group_id, group):
     msg = await app.bot.send_message(
