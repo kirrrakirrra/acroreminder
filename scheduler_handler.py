@@ -240,7 +240,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
-            if now.hour == 19 and 20 <= now.minute <= 23:
+            if now.hour == 19 and 40 <= now.minute <= 43:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
