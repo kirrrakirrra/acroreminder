@@ -194,7 +194,6 @@ async def main():
         
     # Инициализация приложения
     await app.initialize()
-    await app.start()
 
     # Хендлеры
     app.add_handler(get_start_handler())
@@ -209,15 +208,13 @@ async def main():
     await start_webserver(app)
 
     logging.info("🚀 Бот работает в режиме Webhook")
-    
-     # 👉 Устанавливаем webhook
-    webhook_url = f"{os.getenv('RENDER_EXTERNAL_URL')}/webhook"
-    await app.bot.set_webhook(webhook_url)
-    logging.info(f"✅ Webhook установлен: {webhook_url}")
 
-    # 👇 Чтобы app ждал обновления Webhook
-    await app.updater.start_polling()  # это нужно, чтобы не выйти
-    await app.updater.wait()
+    # 👉 Устанавливаем webhook
+    await app.bot.set_webhook(f"{os.getenv('RENDER_EXTERNAL_URL')}/webhook")
+    logging.info("✅ Webhook установлен")
+
+    # Удерживаем процесс
+    await asyncio.Event().wait()
 
 # Точка входа
 if __name__ == "__main__":
