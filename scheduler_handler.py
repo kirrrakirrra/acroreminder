@@ -1,3 +1,5 @@
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 import datetime
@@ -5,8 +7,19 @@ import asyncio
 import os
 import logging
 
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # переменная должна быть в Render Environment
+SHEET_RANGE = 'Абонементы!A1:Q'  # до колонки Q включительно
+
+creds = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+)
+sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+
 ADMIN_ID = os.getenv("ADMIN_ID")
 GROUP_ID = os.getenv("GROUP_ID")
+
 # Список групп
 groups = [
     {
@@ -55,6 +68,58 @@ def get_reason_keyboard(group_id):
         [InlineKeyboardButton("⚠️ Непредвиденное", callback_data=f"reason|{group_id}|unexpected")],
         [InlineKeyboardButton("⚙️ Тех. неполадки", callback_data=f"reason|{group_id}|tech")],
     ])
+
+async def check_expired_subscriptions(app, today_group_names):
+    try:
+        resp = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=SHEET_RANGE
+        ).execute()
+        rows = resp.get('values', [])
+        if not rows or len(rows) < 2:
+            print("Таблица пуста или недоступна.")
+            return
+
+        header = rows[0]
+        try:
+            idx_name = header.index("Имя ребёнка")
+            idx_group = header.index("Группа")
+            idx_used = header.index("Использованно")
+        except ValueError as e:
+            print(f"Колонка не найдена: {e}")
+            return
+
+        from collections import defaultdict
+        usage_by_name = defaultdict(list)
+        for row in rows[1:]:
+            name = row[idx_name] if len(row) > idx_name else ""
+            used = row[idx_used] if len(row) > idx_used else ""
+            group = row[idx_group] if len(row) > idx_group else ""
+
+            if not name or group not in today_group_names:
+                continue
+
+            try:
+                used_num = int(used)
+            except:
+                used_num = 0
+
+            usage_by_name[name].append({
+                "used": used_num,
+                "group": group
+            })
+
+        for name, subs in usage_by_name.items():
+            finished = [s for s in subs if s["used"] == 8]
+            not_finished = [s for s in subs if s["used"] < 8]
+
+            if finished and not not_finished:
+                for sub in finished:
+                    msg = f"⚠️ Абонемент завершён:\nИмя: {name}\nГруппа: {sub['group']}\nИспользовано: 8 из 8"
+                    await app.bot.send_message(chat_id=ADMIN_ID, text=msg)
+
+    except Exception as e:
+        logging.warning(f"Ошибка при проверке завершённых абонементов: {e}")
 
 async def ask_admin(app, group_id, group):
     msg = await app.bot.send_message(
@@ -112,6 +177,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def scheduler(app):
     await asyncio.sleep(30)  # даём Render время на перезапуск
     last_check = None
+    last_expiry_check = None
 
     while True:
         try:
@@ -122,7 +188,7 @@ async def scheduler(app):
 
             print(f"[scheduler] Сейчас {current_time} {weekday}")
 
-            # Проверяем только если это будний день из расписания
+            # 🔁 Опрос администратора в 11:00
             if now.hour == 11 and 1 <= now.minute <= 3:
                 if last_check != now.date():
                     print("[scheduler] Время для опроса — запускаем")
@@ -132,6 +198,20 @@ async def scheduler(app):
                     last_check = now.date()
                 else:
                     print("[scheduler] Уже запускали сегодня")
+
+            # 📋 Проверка завершённых абонементов в 12:00
+            if now.hour == 12 and 0 <= now.minute <= 2:
+                if last_expiry_check != now.date():
+                    print("[scheduler] Проверяем абонементы на завершение...")
+                    today_groups = []
+                    for group in groups:
+                        if weekday in group["days"]:
+                            today_groups.append(group["name"])
+                    await check_expired_subscriptions(app, today_groups)
+                    last_expiry_check = now.date()
+                else:
+                    print("[scheduler] Проверка абонементов уже была сегодня")
+
             await asyncio.sleep(20)
 
         except Exception as e:
