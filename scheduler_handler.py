@@ -18,6 +18,7 @@ creds = service_account.Credentials.from_service_account_file(
 sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
 
 ADMIN_ID = os.getenv("ADMIN_ID")
+KARINA_ID = os.getenv("KARINA_ID")
 GROUP_ID = os.getenv("GROUP_ID")
 
 # Список групп
@@ -116,7 +117,7 @@ async def check_expired_subscriptions(app, today_group_names):
             if finished and not not_finished:
                 for sub in finished:
                     msg = f"⚠️ Абонемент завершён:\nИмя: {name}\nГруппа: {sub['group']}\nИспользовано: 8 из 8"
-                    await app.bot.send_message(chat_id=ADMIN_ID, text=msg)
+                    await app.bot.send_message(chat_id=KARINA_ID, text=msg)
 
     except Exception as e:
         logging.warning(f"Ошибка при проверке завершённых абонементов: {e}")
@@ -200,7 +201,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
-            if now.hour == 12 and 0 <= now.minute <= 2:
+            if now.hour == 17 and 50 <= now.minute <= 52:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
