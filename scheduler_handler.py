@@ -71,6 +71,9 @@ def get_reason_keyboard(group_id):
     ])
 
 async def check_expired_subscriptions(app, today_group_names):
+    print("🔍 check_expired_subscriptions запущена")
+    logging.info("🔍 check_expired_subscriptions запущена")
+
     try:
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
@@ -78,7 +81,8 @@ async def check_expired_subscriptions(app, today_group_names):
         ).execute()
         rows = resp.get('values', [])
         if not rows or len(rows) < 2:
-            print("Таблица пуста или недоступна.")
+            print("⛔️ Таблица пуста или недоступна.")
+            logging.warning("⛔️ Таблица пуста или недоступна.")
             return
 
         header = rows[0]
@@ -87,11 +91,14 @@ async def check_expired_subscriptions(app, today_group_names):
             idx_group = header.index("Группа")
             idx_used = header.index("Использованно")
         except ValueError as e:
-            print(f"Колонка не найдена: {e}")
+            print(f"⛔️ Колонка не найдена: {e}")
+            logging.warning(f"⛔️ Колонка не найдена: {e}")
             return
 
+        logging.info(f"🔎 Группы, которые проверяются сегодня: {today_group_names}")
         from collections import defaultdict
         usage_by_name = defaultdict(list)
+
         for row in rows[1:]:
             name = row[idx_name] if len(row) > idx_name else ""
             used = row[idx_used] if len(row) > idx_used else ""
@@ -110,21 +117,41 @@ async def check_expired_subscriptions(app, today_group_names):
                 "group": group
             })
 
+        found = False
         for name, subs in usage_by_name.items():
             finished = [s for s in subs if s["used"] == 8]
             not_finished = [s for s in subs if s["used"] < 8]
 
             if finished and not not_finished:
                 for sub in finished:
-                    msg = f"⚠️ Абонемент завершён:\nИмя: {name}\nГруппа: {sub['group']}\nИспользовано: 8 из 8"
-                    await app.bot.send_message(chat_id=KARINA_ID, text=msg)
+                    msg = (
+                        f"⚠️ Абонемент завершён:\n"
+                        f"Имя: {name}\n"
+                        f"Группа: {sub['group']}\n"
+                        f"Использовано: 8 из 8"
+                    )
+                    print(f"📤 Отправка сообщения: {msg}")
+                    logging.info(f"📤 Отправка сообщения: {msg}")
+
+                    if KARINA_ID:
+                        try:
+                            await app.bot.send_message(chat_id=KARINA_ID, text=msg)
+                            found = True
+                        except Exception as e:
+                            logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
+                    else:
+                        logging.warning("❗️ KARINA_ID не задан")
+
+        if not found:
+            logging.info("✅ Нет завершённых абонементов для отправки.")
 
     except Exception as e:
-        logging.warning(f"Ошибка при проверке завершённых абонементов: {e}")
+        logging.warning(f"❗️ Ошибка при проверке завершённых абонементов: {e}")
+
 
 async def ask_admin(app, group_id, group):
     msg = await app.bot.send_message(
-        chat_id=ADMIN_ID,
+        chat_id=KARINA_ID,
         text=f"Сегодня занятие для {group['name']} в {group['time']} по расписанию?",
         reply_markup=get_decision_keyboard(group_id)
     )
@@ -190,7 +217,7 @@ async def scheduler(app):
             logging.info(f"[scheduler] Сейчас {current_time} {weekday}")
 
             # 🔁 Опрос администратора в 11:00
-            if now.hour == 11 and 1 <= now.minute <= 3:
+            if now.hour == 18 and 18 <= now.minute <= 20:
                 if last_check != now.date():
                     logging.info("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
@@ -201,7 +228,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
-            if now.hour == 17 and 50 <= now.minute <= 52:
+            if now.hour == 18 and 23 <= now.minute <= 25:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
