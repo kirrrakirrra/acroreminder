@@ -3,6 +3,7 @@ import datetime
 import logging
 import nest_asyncio
 from aiohttp import web
+from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
 from check_handler import check_subscriptions
 from info_handler import info_command, info_callback
