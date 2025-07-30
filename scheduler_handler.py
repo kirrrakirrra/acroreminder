@@ -145,7 +145,7 @@ async def check_expired_subscriptions(app, today_group_names):
             
                             if KARINA_ID:
                                 try:
-                                    await app.bot.send_message(chat_id=KARINA_ID, text=msg)
+                                    await app.bot.send_message(chat_id=KARINA_ID, text=msg,parse_mode="Markdown")
                                     found = True
                                 except Exception as e:
                                     logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
@@ -240,7 +240,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
-            if now.hour == 19 and 17 <= now.minute <= 19:
+            if now.hour == 19 and 20 <= now.minute <= 23:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
