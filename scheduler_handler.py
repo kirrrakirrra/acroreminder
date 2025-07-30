@@ -124,23 +124,34 @@ async def check_expired_subscriptions(app, today_group_names):
 
             if finished and not not_finished:
                 for sub in finished:
-                    msg = (
-                        f"⚠️ Абонемент завершён:\n"
-                        f"Имя: {name}\n"
-                        f"Группа: {sub['group']}\n"
-                        f"Использовано: 8 из 8"
-                    )
-                    print(f"📤 Отправка сообщения: {msg}")
-                    logging.info(f"📤 Отправка сообщения: {msg}")
-
-                    if KARINA_ID:
-                        try:
-                            await app.bot.send_message(chat_id=KARINA_ID, text=msg)
-                            found = True
-                        except Exception as e:
-                            logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
-                    else:
-                        logging.warning("❗️ KARINA_ID не задан")
+                    # Ищем первую строку с этим именем и группой
+                    for row in rows[1:]:
+                        row_name = row[idx_name] if len(row) > idx_name else ""
+                        row_group = row[idx_group] if len(row) > idx_group else ""
+                        if row_name == name and row_group == sub["group"]:
+                            # Даты посещений: колонки D–N → индексы 3–13
+                            dates = [row[i] for i in range(3, 14) if i < len(row) and row[i].strip()]
+                            dates_text = "\n".join([f"• {d}" for d in dates]) if dates else "—"
+        
+                            msg = (
+                                f"⚠️ Абонемент завершён:\n"
+                                f"Имя: {name}\n"
+                                f"Группа: {sub['group']}\n"
+                                f"Использовано: 8 из 8\n"
+                                f"📅 Даты посещений:\n{dates_text}"
+                            )
+        
+                        print(f"📤 Отправка сообщения: {msg}")
+                        logging.info(f"📤 Отправка сообщения: {msg}")
+    
+                        if KARINA_ID:
+                            try:
+                                await app.bot.send_message(chat_id=KARINA_ID, text=msg)
+                                found = True
+                            except Exception as e:
+                                logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
+                        else:
+                            logging.warning("❗️ KARINA_ID не задан")
 
         if not found:
             logging.info("✅ Нет завершённых абонементов для отправки.")
@@ -151,7 +162,7 @@ async def check_expired_subscriptions(app, today_group_names):
 
 async def ask_admin(app, group_id, group):
     msg = await app.bot.send_message(
-        chat_id=KARINA_ID,
+        chat_id=ADMIN_ID,
         text=f"Сегодня занятие для {group['name']} в {group['time']} по расписанию?",
         reply_markup=get_decision_keyboard(group_id)
     )
@@ -217,7 +228,7 @@ async def scheduler(app):
             logging.info(f"[scheduler] Сейчас {current_time} {weekday}")
 
             # 🔁 Опрос администратора в 11:00
-            if now.hour == 18 and 18 <= now.minute <= 20:
+            if now.hour == 11 and 1 <= now.minute <= 3:
                 if last_check != now.date():
                     logging.info("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
@@ -228,7 +239,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
-            if now.hour == 18 and 23 <= now.minute <= 25:
+            if now.hour == 18 and 42 <= now.minute <= 45:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
