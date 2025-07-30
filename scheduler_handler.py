@@ -186,23 +186,23 @@ async def scheduler(app):
             weekday = now.strftime("%A")
             current_time = now.strftime("%H:%M")
 
-            print(f"[scheduler] Сейчас {current_time} {weekday}")
+            logging.info(f"[scheduler] Сейчас {current_time} {weekday}")
 
             # 🔁 Опрос администратора в 11:00
             if now.hour == 11 and 1 <= now.minute <= 3:
                 if last_check != now.date():
-                    print("[scheduler] Время для опроса — запускаем")
+                    logging.info("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
                         if weekday in group["days"]:
                             await ask_admin(app, idx, group)
                     last_check = now.date()
                 else:
-                    print("[scheduler] Уже запускали сегодня")
+                    logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
             if now.hour == 12 and 0 <= now.minute <= 2:
                 if last_expiry_check != now.date():
-                    print("[scheduler] Проверяем абонементы на завершение...")
+                    logging.info("[scheduler] Проверяем абонементы на завершение...")
 
                     # Словарь соответствия: название в коде -> название в таблице
                     group_name_map = {
@@ -220,10 +220,10 @@ async def scheduler(app):
                     await check_expired_subscriptions(app, today_groups)
                     last_expiry_check = now.date()
                 else:
-                    print("[scheduler] Проверка абонементов уже была сегодня")
+                    logging.info("[scheduler] Проверка абонементов уже была сегодня")
 
             await asyncio.sleep(20)
 
         except Exception as e:
-            print(f"[scheduler] Ошибка: {e}")
+            logging.error(f"[scheduler] Ошибка: {e}")
             await asyncio.sleep(10)
