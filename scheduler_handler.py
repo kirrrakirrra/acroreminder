@@ -18,7 +18,6 @@ creds = service_account.Credentials.from_service_account_file(
 sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
 
 ADMIN_ID = os.getenv("ADMIN_ID")
-KARINA_ID = os.getenv("KARINA_ID")
 GROUP_ID = os.getenv("GROUP_ID")
 
 # Список групп
@@ -128,8 +127,8 @@ async def check_expired_subscriptions(app, today_group_names):
                         row_name = row[idx_name] if len(row) > idx_name else ""
                         row_group = row[idx_group] if len(row) > idx_group else ""
                         if row_name == name and row_group == sub["group"]:
-                            # Даты посещений: колонки D–N → индексы 3–13
-                            dates = [row[i] for i in range(3, 14) if i < len(row) and row[i].strip()]
+                            # Даты посещений: колонки F–M → индексы 5–12
+                            dates = [row[i] for i in range(5, 13) if i < len(row) and row[i].strip()]
                             dates_text = "\n".join([f"• {d}" for d in dates]) if dates else "—"
             
                             msg = (
@@ -143,14 +142,14 @@ async def check_expired_subscriptions(app, today_group_names):
                             print(f"📤 Отправка сообщения: {msg}")
                             logging.info(f"📤 Отправка сообщения: {msg}")
             
-                            if KARINA_ID:
+                            if ADMIN_ID:
                                 try:
-                                    await app.bot.send_message(chat_id=KARINA_ID, text=msg)
+                                    await app.bot.send_message(chat_id=ADMIN_ID, text=msg)
                                     found = True
                                 except Exception as e:
                                     logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
                             else:
-                                logging.warning("❗️ KARINA_ID не задан")
+                                logging.warning("❗️ ADMIN_ID не задан")
             
                             break  # выходим из цикла, как только нашли и отправили
 
@@ -240,7 +239,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
-            if now.hour == 18 and 42 <= now.minute <= 45:
+            if now.hour == 12 and 15 <= now.minute <= 18:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
