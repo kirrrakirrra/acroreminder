@@ -203,10 +203,20 @@ async def scheduler(app):
             if now.hour == 12 and 0 <= now.minute <= 2:
                 if last_expiry_check != now.date():
                     print("[scheduler] Проверяем абонементы на завершение...")
-                    today_groups = []
-                    for group in groups:
-                        if weekday in group["days"]:
-                            today_groups.append(group["name"])
+
+                    # Словарь соответствия: название в коде -> название в таблице
+                    group_name_map = {
+                        "Старшей начинающей группы": "6-9 лет начинающие",
+                        "Старшей продолжающей группы": "6-9 лет продолжающие",
+                        "Младшей группы": "4-5 лет",
+                    }
+        
+                    # Преобразуем названия из кода в названия таблицы
+                    today_groups = [
+                        group_name_map.get(group["name"])
+                        for group in groups
+                        if weekday in group["days"]
+                    ]
                     await check_expired_subscriptions(app, today_groups)
                     last_expiry_check = now.date()
                 else:
