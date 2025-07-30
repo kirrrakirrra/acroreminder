@@ -3,6 +3,7 @@ import datetime
 import logging
 import nest_asyncio
 from aiohttp import web
+from start_handler import get_start_handler
 from check_handler import check_subscriptions
 from info_handler import info_command, info_callback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -195,6 +196,7 @@ async def main():
     await app.initialize()
 
     # Хендлеры
+    app.add_handler(get_start_handler())
     app.add_handler(CommandHandler("check", check_subscriptions))
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|no|reason|skip|polina)\|"))
