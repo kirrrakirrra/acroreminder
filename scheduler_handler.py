@@ -121,7 +121,6 @@ async def check_expired_subscriptions(app, today_group_names):
         for name, subs in usage_by_name.items():
             finished = [s for s in subs if s["used"] == 8]
             not_finished = [s for s in subs if s["used"] < 8]
-
             if finished and not not_finished:
                 for sub in finished:
                     # Ищем первую строку с этим именем и группой
@@ -132,7 +131,7 @@ async def check_expired_subscriptions(app, today_group_names):
                             # Даты посещений: колонки D–N → индексы 3–13
                             dates = [row[i] for i in range(3, 14) if i < len(row) and row[i].strip()]
                             dates_text = "\n".join([f"• {d}" for d in dates]) if dates else "—"
-        
+            
                             msg = (
                                 f"⚠️ Абонемент завершён:\n"
                                 f"Имя: {name}\n"
@@ -140,18 +139,20 @@ async def check_expired_subscriptions(app, today_group_names):
                                 f"Использовано: 8 из 8\n"
                                 f"📅 Даты посещений:\n{dates_text}"
                             )
-        
-                        print(f"📤 Отправка сообщения: {msg}")
-                        logging.info(f"📤 Отправка сообщения: {msg}")
-    
-                        if KARINA_ID:
-                            try:
-                                await app.bot.send_message(chat_id=KARINA_ID, text=msg)
-                                found = True
-                            except Exception as e:
-                                logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
-                        else:
-                            logging.warning("❗️ KARINA_ID не задан")
+            
+                            print(f"📤 Отправка сообщения: {msg}")
+                            logging.info(f"📤 Отправка сообщения: {msg}")
+            
+                            if KARINA_ID:
+                                try:
+                                    await app.bot.send_message(chat_id=KARINA_ID, text=msg)
+                                    found = True
+                                except Exception as e:
+                                    logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
+                            else:
+                                logging.warning("❗️ KARINA_ID не задан")
+            
+                            break  # выходим из цикла, как только нашли и отправили
 
         if not found:
             logging.info("✅ Нет завершённых абонементов для отправки.")
