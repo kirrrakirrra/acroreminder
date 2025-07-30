@@ -18,6 +18,7 @@ creds = service_account.Credentials.from_service_account_file(
 sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
 
 ADMIN_ID = os.getenv("ADMIN_ID")
+KARINA_ID = os.getenv("KARINA_ID")
 GROUP_ID = os.getenv("GROUP_ID")
 
 # Список групп
@@ -68,7 +69,7 @@ def get_reason_keyboard(group_id):
         [InlineKeyboardButton("⚠️ Непредвиденное", callback_data=f"reason|{group_id}|unexpected")],
         [InlineKeyboardButton("⚙️ Тех. неполадки", callback_data=f"reason|{group_id}|tech")],
     ])
-# ----------------------------------------------------------------
+# ------------------------------------------------------------------------------------
 async def check_expired_subscriptions(app, today_group_names):
     print("🔍 check_expired_subscriptions запущена")
     logging.info("🔍 check_expired_subscriptions запущена")
@@ -142,9 +143,9 @@ async def check_expired_subscriptions(app, today_group_names):
                             print(f"📤 Отправка сообщения: {msg}")
                             logging.info(f"📤 Отправка сообщения: {msg}")
             
-                            if ADMIN_ID:
+                            if KARINA_ID:
                                 try:
-                                    await app.bot.send_message(chat_id=ADMIN_ID, text=msg)
+                                    await app.bot.send_message(chat_id=KARINA_ID, text=msg)
                                     found = True
                                 except Exception as e:
                                     logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
@@ -239,7 +240,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:00
-            if now.hour == 12 and 15 <= now.minute <= 18:
+            if now.hour == 19 and 17 <= now.minute <= 19:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
