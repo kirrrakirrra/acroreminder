@@ -10,7 +10,7 @@ import logging
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # берём из окружения
-SHEET_RANGE = 'Абонементы!B1:P'
+SHEET_RANGE = 'Абонементы!B1:Q'
 
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
