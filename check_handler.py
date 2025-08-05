@@ -57,16 +57,17 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         idx_end = header.index("Срок действия")
         idx_used = header.index("Использованно")
         idx_usercol = header.index("username")
+        idx_idcol = header.index("user_id")
         visit_cols = [f"{i} посещение" for i in range(1, 9)]
         idx_dates = [header.index(col) for col in visit_cols]
     except ValueError as e:
         return await update.message.reply_text(f"Не найдена колонка в таблице: {e}")
 
     # username-сравнение (без @, с нижним регистром)
-    raw_user = update.effective_user.username
-    user = raw_user.lstrip('@').lower()
     user_rows = []
+
     # 1. Поиск по username, если он задан
+    raw_user = update.effective_user.username
     if raw_user:
         user = raw_user.lstrip('@').lower()
         for row in rows[1:]:
