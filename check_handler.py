@@ -83,8 +83,11 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         if idx_idcol is not None:
             for row in rows[1:]:
-                if len(row) > idx_idcol and row[idx_idcol].strip() == str(user_id):
-                    user_rows.append(row)
+                if len(row) > idx_idcol:
+                    cell = str(row[idx_idcol])
+                    allowed_ids = [n.strip() for n in cell.split(',') if n.strip()]
+                    if str(user_id) in allowed_ids:
+                        user_rows.append(row)
 
     # 3. Если всё ещё пусто — сообщение
     if not user_rows:
