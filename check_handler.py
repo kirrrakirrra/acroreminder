@@ -66,13 +66,16 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
     raw_user = update.effective_user.username
     user = raw_user.lstrip('@').lower()
     user_rows = []
-    for row in rows[1:]:
-        if len(row) <= idx_usercol:
-            continue
-        cell = row[idx_usercol]
-        allowed = [n.strip().lstrip('@').lower() for n in cell.split(',') if n.strip()]
-        if user in allowed:
-            user_rows.append(row)
+    # 1. Поиск по username, если он задан
+    if raw_user:
+        user = raw_user.lstrip('@').lower()
+        for row in rows[1:]:
+            if len(row) <= idx_usercol:
+                continue
+            cell = row[idx_usercol]
+            allowed = [n.strip().lstrip('@').lower() for n in cell.split(',') if n.strip()]
+            if user in allowed:
+                user_rows.append(row)
 
     # 2. Если по username не найдено — ищем по user_id
     if not user_rows:
