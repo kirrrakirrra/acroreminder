@@ -6,11 +6,13 @@ import os
 # Кнопки
 def get_info_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📌 Цены", callback_data="info|prices")],
+        [InlineKeyboardButton("📌 Цены на групповые занятия", callback_data="info|prices")],
         [InlineKeyboardButton("📅 Расписание", callback_data="info|schedule")],
+        [InlineKeyboardButton("📍 Как найти зал", callback_data="info|location")],
         [InlineKeyboardButton("🧦 Правила", callback_data="info|rules")],
         [InlineKeyboardButton("🧾 Абонементы", callback_data="info|abonement")],
         [InlineKeyboardButton("🎯 Индивидуальные тренировки", callback_data="info|personal")],
+        [InlineKeyboardButton("🤸🏻‍♂️ Про тренеров", callback_data="info|coaches")],
     ])
 
 # /info
@@ -20,16 +22,6 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_msg = f"/info used by {user.full_name} (@{user.username}) [ID: {user.id}]"
     print(log_msg)
     logging.info(log_msg)
-
-    # karina_id = os.getenv("KARINA_ID")
-    # if karina_id:
-    #     try:
-    #         await context.bot.send_message(
-    #             chat_id=karina_id,
-    #             text=f"📋 /info использовал: {user.full_name} (@{user.username})[ID: {user_id}]"
-    #         )
-    #     except Exception as e:
-    #         logging.warning(f"Не удалось отправить Карине сообщение: {e}")
 
     await update.message.reply_text(
         "📋 Выберите интересующий раздел:",
@@ -70,14 +62,11 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     info_texts = {
         "prices": (
-            "📌 *Цены*\n\n"
-            "*Групповые занятия:*\n"
+            "📌 *Цены на групповые занятия:*\n\n"
             "▫️ Пробное занятие — 150.000₫\n"
             "▫️ Разовое занятие — 250.000₫\n"
             "▫️ Абонемент на 8 занятий — 1.600.000₫ (по 200.000₫ за занятие)\n\n"
-            "*Индивидуальные и парные занятия:*\n"
-            "▫️ Индивидуальная тренировка — 1ч: 350.000₫, 1.5ч: 500.000₫\n"
-            "▫️ Парная тренировка (с человека) — 1ч: 300.000₫, 1.5ч: 400.000₫"
+            "❗️*Обязательна предварительная запись*❗️"
         ),
         "schedule": (
             "📅 *Расписание групповых занятий:*\n\n"
@@ -87,6 +76,14 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Пн / Ср / Пт — 17:15–18:15\n\n"
             "🤸🏻‍♀️ Старшая продолжающая (6–10 лет)\n"
             "Пн / Ср / Пт — 18:30–19:30"
+            "❗️*Обязательна предварительная запись*❗️"
+        ),
+            "location": (
+                "📍 *Как найти зал:*\n\n"
+                "Город: Nha Trang\n"
+                "Рядом:Scenia Bay, Shama book bakery, Marisan\n\n"
+                "📸 [Фото фасада зала](https://t.me/c/1820363527/1/2233)\n"
+                "🗺 [Открыть в Google Maps](https://maps.app.goo.gl/PzUYSZNyid4P2gwd7?g_st=com.google.maps.preview.copy)"
         ),
         "rules": (
             "🧦 *Правила и подготовка:*\n\n"
@@ -115,6 +112,16 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• 1 час — 300.000₫\n"
             "• 1.5 часа — 400.000₫"
         ),
+        "coaches": (
+            "🤸🏼 *О тренерах:*\n\n"
+            "🤸🏻‍♂️ *Главный тренер: Фанис*\n"
+            "• Контакт: [@FaniRaf](https://t.me/FaniRaf)\n"
+            "• Кандидат в мастера спорта по акробатике\n"
+            "• Тренирует детей в Нячанге с 2022 года\n\n"
+            "🤸🏻‍♀️ *Второй тренер: Полина*\n"
+            "• Контакт: [@Polina_NhaTrang_stretching](https://t.me/Polina_NhaTrang_stretching)\n"
+            "• Кандидат в мастера спорта по спортивной гимнастике"
+        ),
     }
     
     text = info_texts.get(section)
@@ -127,9 +134,3 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
 
     await query.edit_message_text(text + "\n\n", parse_mode="Markdown", reply_markup=back_keyboard)
-
-    # text = info_texts.get(section, "Информация не найдена.")
-    # await query.edit_message_text(text, parse_mode="Markdown")
-    # text = info_texts.get(section, "Информация не найдена.") + "\n\n↩️ Вернуться к списку: /info"
-    # await query.edit_message_text(text, parse_mode="Markdown")
-
