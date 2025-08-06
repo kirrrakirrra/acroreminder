@@ -82,7 +82,7 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "📍 *Как найти зал:*\n\n"
                 "Город: Nha Trang\n"
                 "Рядом:Scenia Bay, Shama book bakery, Marisan\n\n"
-                "📸 [Фото фасада зала](https://t.me/c/1820363527/1/2746)\n"
+                "📸 [Фото фасада зала](https://t.me/c/1820363527/1/2221)\n"
                 "🗺 [Открыть в Google Maps](https://maps.app.goo.gl/PzUYSZNyid4P2gwd7?g_st=com.google.maps.preview.copy)"
         ),
         "rules": (
