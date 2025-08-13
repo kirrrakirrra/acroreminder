@@ -5,7 +5,7 @@ import nest_asyncio
 from aiohttp import web
 from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
-from check_handler import check_subscriptions
+from check_handler import check_subscriptions, expired_command
 from info_handler import info_command, info_callback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
@@ -67,6 +67,7 @@ async def main():
     # Хендлеры
     app.add_handler(get_start_handler())
     app.add_handler(CommandHandler("check", check_subscriptions))
+    app.add_handler(CommandHandler("expired", expired_command))
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|no|reason|skip|polina)\|"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
