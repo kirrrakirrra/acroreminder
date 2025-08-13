@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 import os
 import logging
+import datetime
 from scheduler_handler import check_expired_subscriptions, groups
 
 # ——————————————————————————————————————————————
