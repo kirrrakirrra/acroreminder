@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 import os
 import logging
+from scheduler_handler import check_expired_subscriptions, groups
 
 # ——————————————————————————————————————————————
 # Настройка доступа к Google Sheets
@@ -122,3 +123,33 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         messages.append(msg)
 
     await update.message.reply_text("\n\n".join(messages), parse_mode="Markdown")
+
+
+# Команда для администратора — вручную проверить завершённые абонементы
+async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    admin_id = os.getenv("ADMIN_ID")
+
+    if str(user_id) != str(admin_id):
+        await update.message.reply_text("⛔ Команда доступна только администратору.")
+        return
+
+    # Определим день недели и группы на сегодня
+    now = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+    weekday = now.strftime("%A")
+
+    group_name_map = {
+        "Старшей начинающей группы": "6-9 лет начинающие",
+        "Старшей продолжающей группы": "6-9 лет продолжающие",
+        "Младшей группы": "4-5 лет",
+    }
+
+    today_groups = [
+        group_name_map.get(group["name"])
+        for group in groups
+        if weekday in group["days"]
+    ]
+
+    await check_expired_subscriptions(context.application, today_groups)
+    await update.message.reply_text("✅ Проверка завершённых абонементов выполнена.")
+
