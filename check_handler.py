@@ -12,7 +12,7 @@ from scheduler_handler import check_expired_subscriptions, groups
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # берём из окружения
-SHEET_RANGE = 'Абонементы!B1:S'
+SHEET_RANGE = 'Абонементы!B1:V'
 
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
@@ -58,7 +58,9 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         idx_start = header.index("Дата начала")
         idx_end = header.index("Срок действия")
         idx_used = header.index("Использованно")
+        idx_diff = header.index("Разница")
         idx_remaining = header.index("Осталось календарных занятий")  # 👈 новое
+        idx_used_left = header.index("Осталось занятий")
         idx_usercol = header.index("username")
         idx_idcol = header.index("user_id")
         visit_cols = [f"{i} посещение" for i in range(1, 9)]
@@ -108,7 +110,17 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         start = row[idx_start] if len(row) > idx_start else "—"
         end = row[idx_end] if len(row) > idx_end else "—"
         used = row[idx_used] if len(row) > idx_used else "0"
-        remaining = row[idx_remaining] if len(row) > idx_remaining else "—"
+       # Вставка дополнительной строки при наличии значения в "Разница"
+        remaining_info = ""
+        if len(row) > idx_diff and row[idx_diff].strip():
+            used_left = row[idx_used_left].strip() if len(row) > idx_used_left else "—"
+            remaining = row[idx_remaining].strip() if len(row) > idx_remaining else "—"
+            remaining_info = (
+                f"\n\n⚠️ Обратите внимание: у вас осталось *{used_left}* неиспользованных занятий, "
+                f"а до конца срока абонемента — *{remaining}* календарных тренировок."
+            )
+
+
 
         dates = []
         for i, idx in enumerate(idx_dates, start=1):
@@ -121,8 +133,8 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"🏷️ *Группа:* `{group}`\n"
             f"📆 *Срок действия:* `{start} — {end}`\n"
             f"✅ *Использовано:* `{used}` из `8`\n"
-            f"🗓 *Календ. тренировок до окончания абон-та:* `{remaining}`\n"
             f"📅 *Даты посещений:*\n{dates_text}"
+            f"{remaining_info}"
         )
         messages.append(msg)
 
