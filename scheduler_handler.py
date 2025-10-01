@@ -201,7 +201,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 allows_multiple_answers=False,
                 message_thread_id=group["thread_id"],
             )
-            await schedule_reminder(app, group, poll_msg.poll.id)
+            await schedule_reminder(context.application, group, poll_msg.poll.id)
         
         except Exception as e:
             logging.warning(f"❗ Не удалось отправить опрос: {e}")
