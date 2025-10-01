@@ -7,13 +7,15 @@ from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
 from check_handler import check_subscriptions, expired_command
 from info_handler import info_command, info_callback
+from reminder_handler import handle_poll_answer
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
     CallbackQueryHandler,
-    CommandHandler
+    CommandHandler,
+    PollAnswerHandler
 )
 
 logging.basicConfig(
@@ -71,6 +73,7 @@ async def main():
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|no|reason|skip|polina)\|"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
+    app.add_handler(PollAnswerHandler(handle_poll_answer))
     app.add_error_handler(error_handler)
 
     # Планировщик и сервер
