@@ -122,13 +122,19 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         from datetime import datetime
 
         expired_warning = ""
-        try:
-            end_date = datetime.strptime(end, "%d.%m.%Y")
-            today = datetime.now()
-            if end_date.date() < today.date() and int(used) < 8:
-                expired_warning = "\n\n‼️ *Срок действия вашего абонемента закончился!*"
-        except Exception as e:
-            logging.warning(f"Не удалось обработать дату окончания абонемента: {e}")
+        # Пробуем несколько форматов даты
+        date_formats = ["%d.%m.%Y", "%d/%m/%y", "%d/%m/%Y", "%Y-%m-%d"]
+        for fmt in date_formats:
+            try:
+                end_date = datetime.strptime(end, fmt)
+                today = datetime.now()
+                if end_date.date() < today.date() and int(used) < 8:
+                    expired_warning = "\n\n‼️ *Срок действия вашего абонемента закончился!*"
+                break  # успешно разобрали, выходим из цикла
+            except ValueError:
+                continue
+        else:
+            logging.warning(f"Не удалось обработать дату окончания абонемента: {end}")
 
 
         dates = []
