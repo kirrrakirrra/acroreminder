@@ -1,29 +1,87 @@
 import asyncio
 import logging
 from telegram.constants import ParseMode
+from datetime import datetime
 
-# Временное хранилище голосов: {poll_id: set(user_ids)}
+# Хранилище голосов в памяти (резервный вариант)
 poll_votes = {}
 
-# Храним связь между poll_id и группой
+# Храним связь poll_id → group
 poll_to_group = {}
 
-# Добавляется при регистрации handler'а PollAnswer
+# Google Sheets
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+import os
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+SURVEY_SHEET = 'Опросы'
+
+creds = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+)
+sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+
+# Обработчик голосов
 async def handle_poll_answer(update, context):
     poll_id = update.poll_answer.poll_id
-    user_id = update.poll_answer.user.id
+    user = update.poll_answer.user
+    user_id = user.id
+    username = user.username or "(без username)"
+    full_name = user.full_name
+    vote_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    selected_options = update.poll_answer.option_ids
+    if not selected_options:
+        return
+
+    # Получаем текст ответа из poll.message.options (если доступно)
+    option_text = ""
+    try:
+        poll = context.bot_data.get(poll_id)
+        if poll:
+            option_text = poll.options[selected_options[0]].text
+    except:
+        option_text = "(нет текста)"
+
+    group_name = poll_to_group.get(poll_id, {}).get("name", "?")
+
+    # Пишем в память (резервно)
     if poll_id not in poll_votes:
         poll_votes[poll_id] = set()
     poll_votes[poll_id].add(user_id)
 
+    # Запись в Google Sheet
+    try:
+        new_row = [[
+            poll_id,
+            group_name,
+            str(user_id),
+            f"@{username}" if username else "",
+            full_name,
+            option_text,
+            vote_time
+        ]]
+        sheets_service.values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=SURVEY_SHEET,
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body={"values": new_row}
+        ).execute()
+        logging.info(f"✅ Ответ опроса записан: {user_id} / @{username} — {option_text}")
+    except Exception as e:
+        logging.warning(f"❗ Не удалось записать голос в таблицу: {e}")
+
 # Планируем напоминание через 60 минут
 async def schedule_reminder(app, group, poll_id):
     poll_to_group[poll_id] = group
-    await asyncio.sleep(60 * 60)  # 1 час ожидания
+    await asyncio.sleep(60 * 60)
     await send_nonresponders_reminder(app, poll_id)
 
-# Сравниваем абонементов и отметившихся
+# Сравнение участников опроса и абонементов
 async def send_nonresponders_reminder(app, poll_id):
     group = poll_to_group.get(poll_id)
     if not group:
@@ -70,25 +128,23 @@ async def send_nonresponders_reminder(app, poll_id):
             if pause == "TRUE":
                 continue
 
-            # Получаем user_id по username нельзя напрямую — поэтому упрощённо:
-            # мы предполагаем, что poll_votes содержит user_id голосовавших
-            # и нам нужно найти, чьего username там нет
-            # Это ограничение можно решить, если ты хранишь user_id и username заранее
-            
-            # Пока: просто соберём всех, т.к. нет связи username ↔ user_id
             mentions.append(f"@{username}")
 
-        # Исключаем тех, кто проголосовал
-        voted_ids = poll_votes.get(poll_id, set())
-        if voted_ids:
-            # В будущем можно соотносить user_id ↔ username по стартовой команде /start
-            logging.info("🟡 Опрос был, но нет точной связи username ↔ user_id")
+        # Получаем ответы из Google Sheet
+        result = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=SURVEY_SHEET + "!A2:G"
+        ).execute()
+        voted_rows = result.get("values", [])
+        voted_usernames = set(row[3].lstrip("@").lower() for row in voted_rows if row[0] == poll_id)
 
-        if mentions:
+        final_mentions = [m for m in mentions if m.lstrip("@").lower() not in voted_usernames]
+
+        if final_mentions:
             text = (
                 "⏰ *Напоминание!*
 Кто-то из вас ещё не отметил участие в сегодняшнем занятии. Пожалуйста, отметьтесь в опросе выше 👆\n\n"
-                + " ".join(mentions)
+                + " ".join(final_mentions)
             )
             await app.bot.send_message(
                 chat_id=group["thread_id"],
