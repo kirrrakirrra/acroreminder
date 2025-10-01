@@ -75,7 +75,3 @@ async def handle_poll_answer(update, context):
     except Exception as e:
         logging.warning(f"❗ Не удалось записать голос в таблицу: {e}")
         
-        await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
-        
-        except Exception as e:
-            logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
