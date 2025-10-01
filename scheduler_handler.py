@@ -201,6 +201,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 allows_multiple_answers=False,
                 message_thread_id=group["thread_id"],
             )
+            context.bot_data[poll_msg.poll.id] = poll_msg.poll  # 👈 вот это добавь
             await schedule_reminder(context.application, group, poll_msg.poll.id)
         
         except Exception as e:
