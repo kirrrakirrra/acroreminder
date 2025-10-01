@@ -2,6 +2,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+# from reminder_handler import schedule_reminder
 import datetime
 import asyncio
 import os
@@ -10,7 +11,7 @@ import logging
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # переменная должна быть в Render Environment
-SHEET_RANGE = 'Абонементы!A1:Q'  # до колонки Q включительно
+SHEET_RANGE = 'Абонементы!A1:W'  # до колонки W включительно
 
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
@@ -188,19 +189,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
         # Опрос
         try:
-            await context.bot.send_poll(
+            poll_msg = await context.bot.send_poll(
                 chat_id=GROUP_ID,
                 question="Кто будет сегодня на занятии?",
-                options=["Будем по абонементу", "Будем разово", "Пропускаем"],
+                options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
                 is_anonymous=False,
                 allows_multiple_answers=False,
                 message_thread_id=group["thread_id"],
             )
+            # await schedule_reminder(app, group, poll_msg.poll.id)
+        
         except Exception as e:
             logging.warning(f"❗ Не удалось отправить опрос: {e}")
-    
+        
         await query.edit_message_text("Напоминание и опрос отправлены ✅")
-
 
     elif action == "no":
         await query.edit_message_text("Выберите причину отмены занятия:", reply_markup=get_reason_keyboard(group_id))
@@ -247,7 +249,7 @@ async def scheduler(app):
 
             # 🔁 Опрос администратора в 11:00
             # if now.hour == 11 and 1 <= now.minute <= 3:
-            if now.hour == 12 and 22 <= now.minute <= 24:
+            if now.hour == 13 and 50 <= now.minute <= 54:
                 if last_check != now.date():
                     logging.info("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
