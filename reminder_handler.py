@@ -78,8 +78,8 @@ async def handle_poll_answer(update, context):
 # Планируем напоминание через 60 минут
 async def schedule_reminder(app, group, poll_id):
     poll_to_group[poll_id] = group
-    await asyncio.sleep(60 * 60)
-    await send_nonresponders_reminder(app, poll_id)
+    # await asyncio.sleep(60 * 60)
+    # await send_nonresponders_reminder(app, poll_id)
 
 # Сравнение участников опроса и абонементов
 async def send_nonresponders_reminder(app, poll_id):
