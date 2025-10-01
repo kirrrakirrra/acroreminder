@@ -250,6 +250,7 @@ async def scheduler(app):
             current_time = now.strftime("%H:%M")
 
             logging.info(f"[scheduler] Сейчас {current_time} {weekday}")
+            logging.info(f"[scheduler] CHECK_HOUR={check_hour}, MIN={min_start}–{min_end}")
 
             # 🔁 Опрос администратора в 11:00
             # if now.hour == 11 and 1 <= now.minute <= 3:
