@@ -75,9 +75,9 @@ async def handle_poll_answer(update, context):
     except Exception as e:
         logging.warning(f"❗ Не удалось записать голос в таблицу: {e}")
 
-# # Планируем напоминание через 60 минут
-# async def schedule_reminder(app, group, poll_id):
-#     poll_to_group[poll_id] = group
+ # Планируем напоминание через 60 минут
+ async def schedule_reminder(app, group, poll_id):
+     poll_to_group[poll_id] = group
 #     # await asyncio.sleep(60 * 60)
 #     # await send_nonresponders_reminder(app, poll_id)
 
