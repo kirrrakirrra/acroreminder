@@ -129,7 +129,7 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
                 end_date = datetime.strptime(end, fmt)
                 today = datetime.now()
                 if end_date.date() < today.date() and int(used) < 8:
-                    expired_warning = f"\n\n‼️ *Срок действия абонемента закончился (`{end}`)!*"
+                    expired_warning = f"\n\n‼️ *Срок действия абонемента закончился {end}!*"
                 break  # успешно разобрали, выходим из цикла
             except ValueError:
                 continue
