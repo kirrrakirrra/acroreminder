@@ -119,7 +119,16 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"\n\n⚠️ Обратите внимание: у вас осталось *{used_left}* неиспользованных занятий, "
                 f"а до конца срока абонемента — *{remaining}* календарных тренировок."
             )
+        from datetime import datetime
 
+        expired_warning = ""
+        try:
+            end_date = datetime.strptime(end, "%d.%m.%Y")
+            today = datetime.now()
+            if end_date.date() < today.date() and int(used) < 8:
+                expired_warning = "\n\n‼️ *Срок действия вашего абонемента закончился!*"
+        except Exception as e:
+            logging.warning(f"Не удалось обработать дату окончания абонемента: {e}")
 
 
         dates = []
@@ -135,6 +144,7 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"✅ *Использовано:* `{used}` из `8`\n"
             f"📅 *Даты посещений:*\n{dates_text}"
             f"{remaining_info}"
+            f"{expired_warning}"
         )
         messages.append(msg)
 
