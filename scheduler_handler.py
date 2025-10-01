@@ -2,6 +2,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+from reminder_handler import poll_to_group
 # from reminder_handler import schedule_reminder
 import datetime
 import asyncio
@@ -202,6 +203,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message_thread_id=group["thread_id"],
             )
             context.bot_data[poll_msg.poll.id] = poll_msg.poll  # 👈 вот это добавь
+            from reminder_handler import poll_to_group
+            poll_to_group[poll_msg.poll.id] = group
             # await schedule_reminder(context.application, group, poll_msg.poll.id)
         
         except Exception as e:
