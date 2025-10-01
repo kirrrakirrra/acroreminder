@@ -2,7 +2,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
-# from reminder_handler import schedule_reminder
+from reminder_handler import schedule_reminder
 import datetime
 import asyncio
 import os
@@ -20,6 +20,10 @@ sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
 
 ADMIN_ID = os.getenv("ADMIN_ID")
 GROUP_ID = os.getenv("GROUP_ID")
+
+check_hour = int(os.getenv("CHECK_HOUR", 11))
+min_start = int(os.getenv("CHECK_MIN_START", 1))
+min_end = int(os.getenv("CHECK_MIN_END", 3))
 
 # Список групп
 groups = [
@@ -197,7 +201,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 allows_multiple_answers=False,
                 message_thread_id=group["thread_id"],
             )
-            # await schedule_reminder(app, group, poll_msg.poll.id)
+             await schedule_reminder(app, group, poll_msg.poll.id)
         
         except Exception as e:
             logging.warning(f"❗ Не удалось отправить опрос: {e}")
@@ -249,7 +253,7 @@ async def scheduler(app):
 
             # 🔁 Опрос администратора в 11:00
             # if now.hour == 11 and 1 <= now.minute <= 3:
-            if now.hour == 13 and 50 <= now.minute <= 54:
+            if now.hour == check_hour and min_start <= now.minute <= min_end:
                 if last_check != now.date():
                     logging.info("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
