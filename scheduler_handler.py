@@ -26,19 +26,21 @@ groups = [
         "name": "Старшей начинающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "17:15",
-        "thread_id": 2225,
+        # "thread_id": 2225,
+        "thread_id": 105,
     },
     {
         "name": "Старшей продолжающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "18:30",
-        "thread_id": 7,
+        # "thread_id": 7,
+        "thread_id": 362,
     },
     {
         "name": "Младшей группы",
         "days": ["Tuesday", "Thursday",],
         "time": "17:30",
-        "thread_id": 2226,
+        # "thread_id": 2226,
     },
 ]
 
@@ -177,12 +179,28 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group = groups[group_id]
 
     if action == "yes":
+        # Сообщение-объявление
         await context.bot.send_message(
             chat_id=GROUP_ID,
             message_thread_id=group["thread_id"],
             text=f"Всем доброго дня! Занятие для {group['name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
         )
-        await query.edit_message_text("Напоминание отправлено ✅")
+    
+        # Опрос
+        try:
+            await context.bot.send_poll(
+                chat_id=GROUP_ID,
+                question="Кто будет сегодня на занятии?",
+                options=["Будем по абонементу", "Будем разово", "Пропускаем"],
+                is_anonymous=False,
+                allows_multiple_answers=False,
+                message_thread_id=group["thread_id"],
+            )
+        except Exception as e:
+            logging.warning(f"❗ Не удалось отправить опрос: {e}")
+    
+        await query.edit_message_text("Напоминание и опрос отправлены ✅")
+
 
     elif action == "no":
         await query.edit_message_text("Выберите причину отмены занятия:", reply_markup=get_reason_keyboard(group_id))
@@ -228,7 +246,8 @@ async def scheduler(app):
             logging.info(f"[scheduler] Сейчас {current_time} {weekday}")
 
             # 🔁 Опрос администратора в 11:00
-            if now.hour == 11 and 1 <= now.minute <= 3:
+            # if now.hour == 11 and 1 <= now.minute <= 3:
+            if now.hour == 12 and 22 <= now.minute <= 24:
                 if last_check != now.date():
                     logging.info("[scheduler] Время для опроса — запускаем")
                     for idx, group in enumerate(groups):
