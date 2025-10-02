@@ -23,7 +23,7 @@ ADMIN_ID = os.getenv("ADMIN_ID")
 GROUP_ID = os.getenv("GROUP_ID")
 
 check_hour = int(os.getenv("CHECK_HOUR", 11))
-min_start = int(os.getenv("CHECK_MIN_START", 1))
+min_start = int(os.getenv("CHECK_MIN_1START", 1))
 min_end = int(os.getenv("CHECK_MIN_END", 3))
 
 # Список групп
@@ -148,10 +148,10 @@ async def check_expired_subscriptions(app, today_group_names):
                             dates_text = "\n".join([f"• {d}" for d in dates]) if dates else "—"
         
                             msg = (
-                                f"⚠️ Абонемент завершён:\n"
+                                f"✅ Абонемент завершён:\n"
                                 f"👤 *Имя*: {name}\n"
                                 f"🏷️ *Группа*: {sub['group']}\n"
-                                f"✅ *Использовано*: 8 из 8\n"
+                                f"☑️ *Использовано*: 8 из 8\n"
                                 f"📅 *Даты посещений*:\n{dates_text}"
                             )
         
@@ -177,20 +177,26 @@ async def check_expired_subscriptions(app, today_group_names):
                                 try:
                                     end_date = datetime.datetime.strptime(end, fmt)
                                     if end_date.date() < datetime.datetime.now().date() and int(used) < 8:
-                                        expired_warning = f"‼️ *Срок действия абонемента закончился (`{end}`)*"
+                                        expired_warning = f"‼️ *Срок действия абонемента закончился {end}*"
                                     break
                                 except ValueError:
                                     continue
         
                             # Проверка дефицита календарных занятий
                             diff_info = ""
-                            if len(row) > idx_diff and row[idx_diff].strip():
-                                used_left = row[idx_used_left].strip() if len(row) > idx_used_left else "—"
-                                remaining = row[idx_remaining].strip() if len(row) > idx_remaining else "—"
-                                diff_info = (
-                                    f"⚠️ Осталось *{used_left}* неиспользованных занятий, "
-                                    f"а до конца срока — *{remaining}* календарных тренировок."
-                                )
+                            if len(row) > idx_diff:
+                                try:
+                                    diff_value = int(row[idx_diff].strip())
+                                    if diff_value in (0, 1):
+                                        used_left = row[idx_used_left].strip() if len(row) > idx_used_left else "—"
+                                        remaining = row[idx_remaining].strip() if len(row) > idx_remaining else "—"
+                                        diff_info = (
+                                            f"⚠️ Осталось *{used_left}* неиспользованных занятий, "
+                                            f"а до конца срока — *{remaining}* календарных тренировок."
+                                        )
+                                except ValueError:
+                                    pass  # если в diff записано не число — просто игнорируем
+                                    
                             # ⏸️ Проверка на паузу
                             on_pause = row[idx_pause].strip().upper() == "TRUE" if len(row) > idx_pause else False
                             pause_text = "\n⏸️ *На паузе*" if on_pause else ""
@@ -201,7 +207,7 @@ async def check_expired_subscriptions(app, today_group_names):
                                     f"⚠️ *Абонемент требует внимания:*\n"
                                     f"👤 *Имя:* {name}\n"
                                     f"🏷️ *Группа:* {sub['group']}\n"
-                                    f"✅ *Использовано:* {used} из 8\n"
+                                    f"☑️ *Использовано:* {used} из 8\n"
                                     f"{diff_info}\n\n{expired_warning}{pause_text}".strip()
                                 )
         
