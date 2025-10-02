@@ -30,8 +30,8 @@ async def handle_poll_answer(update, context):
     user = update.poll_answer.user
     user_id = user.id
     username = user.username or "(без username)"
-    full_name = user.full_name
     vote_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    full_name = user.full_name
 
     selected_options = update.poll_answer.option_ids
     if not selected_options:
@@ -46,7 +46,17 @@ async def handle_poll_answer(update, context):
     except:
         option_text = "(нет текста)"
 
-    group_name = poll_to_group.get(poll_id, {}).get("name", "?")
+    # Загружаем список всех опросов, чтобы найти название группы по poll_id
+    group_name = "?"
+    try:
+        result = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=SURVEY_SHEET + "!A2:B"
+        ).execute()
+        all_rows = result.get("values", [])
+        group_name = next((row[1] for row in all_rows if row[0] == poll_id), "?")
+    except Exception as e:
+        logging.warning(f"❗ Ошибка при получении group_name по poll_id: {e}")
 
     # Пишем в память (резервно)
     if poll_id not in poll_votes:
@@ -60,9 +70,9 @@ async def handle_poll_answer(update, context):
             group_name,
             str(user_id),
             f"@{username}" if username else "",
+            vote_time
             full_name,
             option_text,
-            vote_time
         ]]
         sheets_service.values().append(
             spreadsheetId=SPREADSHEET_ID,
