@@ -250,7 +250,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Напоминание и опрос отправлены ✅")
 
     elif action == "skip":
-        await query.edit_message_text("Хорошо, ничего не публикуем.")
+        await query.edit_message_text("❌ Окей, ничего не публикуем.\nНапоминание: не забудьте сами сообщить группе о деталях отмены")
     pass
     
 async def scheduler(app):
