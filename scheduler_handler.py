@@ -97,6 +97,12 @@ async def check_expired_subscriptions(app, today_group_names):
             idx_name = header.index("Имя ребёнка")
             idx_group = header.index("Группа")
             idx_used = header.index("Использованно")
+            idx_end = header.index("Срок действия")
+            idx_diff = header.index("Разница")
+            idx_remaining = header.index("Осталось календарных занятий")
+            idx_used_left = header.index("Осталось занятий")
+            idx_pause = header.index("Пауза")
+
         except ValueError as e:
             print(f"⛔️ Колонка не найдена: {e}")
             logging.warning(f"⛔️ Колонка не найдена: {e}")
@@ -128,9 +134,11 @@ async def check_expired_subscriptions(app, today_group_names):
         for name, subs in usage_by_name.items():
             finished = [s for s in subs if s["used"] == 8]
             not_finished = [s for s in subs if s["used"] < 8]
+        
+            # ✅ Абонемент завершён (и нет другого активного)
             if finished and not not_finished:
                 for sub in finished:
-                    # Ищем первую строку с этим именем и группой
+                     # Ищем первую строку с этим именем и группой
                     for row in rows[1:]:
                         row_name = row[idx_name] if len(row) > idx_name else ""
                         row_group = row[idx_group] if len(row) > idx_group else ""
@@ -138,7 +146,7 @@ async def check_expired_subscriptions(app, today_group_names):
                             # Даты посещений: колонки F–M → индексы 5–12
                             dates = [row[i] for i in range(5, 13) if i < len(row) and row[i].strip()]
                             dates_text = "\n".join([f"• {d}" for d in dates]) if dates else "—"
-            
+        
                             msg = (
                                 f"⚠️ Абонемент завершён:\n"
                                 f"👤 *Имя*: {name}\n"
@@ -146,26 +154,66 @@ async def check_expired_subscriptions(app, today_group_names):
                                 f"✅ *Использовано*: 8 из 8\n"
                                 f"📅 *Даты посещений*:\n{dates_text}"
                             )
-            
+        
                             print(f"📤 Отправка сообщения: {msg}")
                             logging.info(f"📤 Отправка сообщения: {msg}")
-            
-                            if ADMIN_ID:
+                            await app.bot.send_message(chat_id=ADMIN_ID, text=msg, parse_mode="Markdown")
+                            found = True
+                            break  # нашли нужную строку
+        
+            # ⚠️ Абонементы не завершены, но с рисками
+            elif not_finished:
+                for sub in not_finished:
+                    for row in rows[1:]:
+                        row_name = row[idx_name] if len(row) > idx_name else ""
+                        row_group = row[idx_group] if len(row) > idx_group else ""
+                        if row_name == name and row_group == sub["group"]:
+                            end = row[idx_end] if len(row) > idx_end else ""
+                            used = row[idx_used] if len(row) > idx_used else "0"
+        
+                            # Проверка срока действия
+                            expired_warning = ""
+                            for fmt in ["%d.%m.%Y", "%d/%m/%y", "%d/%m/%Y", "%Y-%m-%d"]:
                                 try:
-                                    await app.bot.send_message(chat_id=ADMIN_ID, text=msg,parse_mode="Markdown")
-                                    found = True
-                                except Exception as e:
-                                    logging.warning(f"Ошибка при отправке сообщения Карине: {e}")
-                            else:
-                                logging.warning("❗️ ADMIN_ID не задан")
-            
-                            break  # выходим из цикла, как только нашли и отправили
-
+                                    end_date = datetime.datetime.strptime(end, fmt)
+                                    if end_date.date() < datetime.datetime.now().date() and int(used) < 8:
+                                        expired_warning = f"‼️ *Срок действия абонемента закончился (`{end}`)*"
+                                    break
+                                except ValueError:
+                                    continue
+        
+                            # Проверка дефицита календарных занятий
+                            diff_info = ""
+                            if len(row) > idx_diff and row[idx_diff].strip():
+                                used_left = row[idx_used_left].strip() if len(row) > idx_used_left else "—"
+                                remaining = row[idx_remaining].strip() if len(row) > idx_remaining else "—"
+                                diff_info = (
+                                    f"⚠️ Осталось *{used_left}* неиспользованных занятий, "
+                                    f"а до конца срока — *{remaining}* календарных тренировок."
+                                )
+                            # ⏸️ Проверка на паузу
+                            on_pause = row[idx_pause].strip().upper() == "TRUE" if len(row) > idx_pause else False
+                            pause_text = "\n⏸️ *На паузе*" if on_pause else ""
+        
+                            # Если есть хоть одна проблема — отправляем
+                            if expired_warning or diff_info:
+                                msg = (
+                                    f"⚠️ *Абонемент требует внимания:*\n"
+                                    f"👤 *Имя:* {name}\n"
+                                    f"🏷️ *Группа:* {sub['group']}\n"
+                                    f"✅ *Использовано:* {used} из 8\n"
+                                    f"{diff_info}\n\n{expired_warning}{pause_text}".strip()
+                                )
+        
+                                print(f"📤 Отправка сообщения: {msg}")
+                                logging.info(f"📤 Отправка сообщения: {msg}")
+                                await app.bot.send_message(chat_id=ADMIN_ID, text=msg, parse_mode="Markdown")
+                                found = True
+                                break  # прекращаем после первой подходящей строки
+        
         if not found:
-            logging.info("✅ Нет завершённых абонементов для отправки.")
+            logging.info("✅ Нет завершённых или рискованных абонементов для отправки.")
 
-    except Exception as e:
-        logging.warning(f"❗️ Ошибка при проверке завершённых абонементов: {e}")
 # -----------------------------------------------------------------------------
 
 async def ask_admin(app, group_id, group):
@@ -269,7 +317,7 @@ async def scheduler(app):
                     logging.info("[scheduler] Уже запускали сегодня")
 
             # 📋 Проверка завершённых абонементов в 12:15
-            if now.hour == 12 and 15 <= now.minute <= 18:
+            if now.hour == 11 and 45 <= now.minute <= 49:
                 if last_expiry_check != now.date():
                     logging.info("[scheduler] Проверяем абонементы на завершение...")
 
