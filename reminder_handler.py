@@ -70,9 +70,9 @@ async def handle_poll_answer(update, context):
             group_name,
             str(user_id),
             f"@{username}" if username else "",
-            vote_time
+            vote_time,
             full_name,
-            option_text,
+            option_text
         ]]
         sheets_service.values().append(
             spreadsheetId=SPREADSHEET_ID,
