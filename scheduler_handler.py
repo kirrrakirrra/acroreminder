@@ -239,6 +239,23 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 allows_multiple_answers=False,
                 message_thread_id=group["thread_id"],
             )
+            # Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
+            try:
+                new_row = [[
+                    poll_msg.poll.id,
+                    group["name"],  # можно заменить на group_value, если хочешь названия из таблицы
+                    "", "", "", "", ""  # пустые ячейки под user_id, username, время и ответ
+                ]]
+                sheets_service.values().append(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range="Опросы!A1",  # ⬅️ явное указание вкладки
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": new_row}
+                ).execute()
+            except Exception as e:
+                logging.warning(f"❗ Не удалось записать poll_id: {e}")
+
             context.bot_data[poll_msg.poll.id] = poll_msg.poll  # 👈 вот это добавь
             from reminder_handler import poll_to_group
             poll_to_group[poll_msg.poll.id] = group
