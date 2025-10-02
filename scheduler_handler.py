@@ -213,6 +213,8 @@ async def check_expired_subscriptions(app, today_group_names):
         
         if not found:
             logging.info("✅ Нет завершённых или рискованных абонементов для отправки.")
+        except Exception as e:
+            logging.warning(f"❗️ Ошибка при проверке завершённых абонементов: {e}")
 
 # -----------------------------------------------------------------------------
 
