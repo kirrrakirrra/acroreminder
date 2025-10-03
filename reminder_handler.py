@@ -41,23 +41,28 @@ async def handle_poll_answer(update, context):
     option_text = ""
     try:
         options = context.bot_data.get(poll_id)
-        if options:
+        if options and len(selected_options) > 0:
             option_text = options[selected_options[0]].text
-    except:
+    except Exception as e:
         logging.warning(f"❗ Ошибка при получении текста опции: {e}")
         option_text = "(нет текста)"
+       
+    # Получаем название группы из poll_to_group
+    group_name = poll_to_group.get(poll_id, {}).get("name", "?")
+    logging.info(f"📝 Ответ от пользователя для группы: {group_name}")
 
-    # Загружаем список всех опросов, чтобы найти название группы по poll_id
-    group_name = "?"
-    try:
-        result = sheets_service.values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range=SURVEY_SHEET + "!A2:B"
-        ).execute()
-        all_rows = result.get("values", [])
-        group_name = next((row[1] for row in all_rows if row[0] == poll_id), "?")
-    except Exception as e:
-        logging.warning(f"❗ Ошибка при получении group_name по poll_id: {e}")
+
+    # # Загружаем список всех опросов, чтобы найти название группы по poll_id
+    # group_name = "?"
+    # try:
+    #     result = sheets_service.values().get(
+    #         spreadsheetId=SPREADSHEET_ID,
+    #         range=SURVEY_SHEET + "!A2:B"
+    #     ).execute()
+    #     all_rows = result.get("values", [])
+    #     group_name = next((row[1] for row in all_rows if row[0] == poll_id), "?")
+    # except Exception as e:
+    #     logging.warning(f"❗ Ошибка при получении group_name по poll_id: {e}")
 
     # Пишем в память (резервно)
     if poll_id not in poll_votes:
