@@ -32,21 +32,21 @@ groups = [
         "name": "Старшей начинающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "17:15",
-        "thread_id": 2225,
-        # "thread_id": 105,
+        # "thread_id": 2225,
+        "thread_id": 105,
     },
     {
         "name": "Старшей продолжающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "18:30",
-        "thread_id": 7,
-        # "thread_id": 362,
+        # "thread_id": 7,
+        "thread_id": 362,
     },
     {
         "name": "Младшей группы",
         "days": ["Tuesday", "Thursday",],
         "time": "17:30",
-        "thread_id": 2226,
+        # "thread_id": 2226,
     },
 ]
 
@@ -239,11 +239,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 allows_multiple_answers=False,
                 message_thread_id=group["thread_id"],
             )
-            # Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
+
+             # ✅ Используем названия групп как в таблице
+            group_map = {
+                "Старшей начинающей группы": "6-9 лет начинающие",
+                "Старшей продолжающей группы": "6-9 лет продолжающие",
+                "Младшей группы": "4-5 лет",
+            }
+            group_value = group_map.get(group["name"], group["name"])
+
+            # ✅ Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
             try:
                 new_row = [[
                     poll_msg.poll.id,
-                    group["name"],  # можно заменить на group_value, если хочешь названия из таблицы
+                    group_value,
                     "", "", "", "", ""  # пустые ячейки под user_id, username, время, имя и ответ
                 ]]
                 sheets_service.values().append(
