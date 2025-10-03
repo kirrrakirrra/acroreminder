@@ -244,7 +244,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 new_row = [[
                     poll_msg.poll.id,
                     group["name"],  # можно заменить на group_value, если хочешь названия из таблицы
-                    "", "", "", "", ""  # пустые ячейки под user_id, username, время и ответ
+                    "", "", "", "", ""  # пустые ячейки под user_id, username, время, имя и ответ
                 ]]
                 sheets_service.values().append(
                     spreadsheetId=SPREADSHEET_ID,
@@ -256,9 +256,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.warning(f"❗ Не удалось записать poll_id: {e}")
 
-            context.bot_data[poll_msg.poll.id] = poll_msg.poll  # 👈 вот это добавь
+            context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  # 👈 вот это добавь
             from reminder_handler import poll_to_group
             poll_to_group[poll_msg.poll.id] = group
+            
             # await schedule_reminder(context.application, group, poll_msg.poll.id)
         
         except Exception as e:
