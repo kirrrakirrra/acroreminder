@@ -40,10 +40,11 @@ async def handle_poll_answer(update, context):
     # Получаем текст ответа из poll.message.options (если доступно)
     option_text = ""
     try:
-        poll = context.bot_data.get(poll_id)
-        if poll:
-            option_text = poll.options[selected_options[0]].text
+        options = context.bot_data.get(poll_id)
+        if options:
+            option_text = options[selected_options[0]].text
     except:
+        logging.warning(f"❗ Ошибка при получении текста опции: {e}")
         option_text = "(нет текста)"
 
     # Загружаем список всех опросов, чтобы найти название группы по poll_id
