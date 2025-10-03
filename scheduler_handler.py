@@ -58,6 +58,7 @@ def get_decision_keyboard(group_id):
         [InlineKeyboardButton("❌ Нет, я сам напишу в группу", callback_data=f"skip|{group_id}")],
     ])
 # ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
 async def check_expired_subscriptions(app, today_group_names):
     print("🔍 check_expired_subscriptions запущена")
     logging.info("🔍 check_expired_subscriptions запущена")
@@ -204,6 +205,7 @@ async def check_expired_subscriptions(app, today_group_names):
         logging.warning(f"❗️ Ошибка при проверке завершённых абонементов: {e}")
 
 # -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
 
 async def ask_admin(app, group_id, group):
     msg = await app.bot.send_message(
@@ -240,18 +242,26 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message_thread_id=group["thread_id"],
             )
 
-             # ✅ Используем названия групп как в таблице
-            group_map = {
-                "Старшей начинающей группы": "6-9 лет начинающие",
-                "Старшей продолжающей группы": "6-9 лет продолжающие",
-                "Младшей группы": "4-5 лет",
-            }
-            group_value = group_map.get(group["name"], group["name"])
-            group["value"] = group_value  # 👈 сохраняем в group для использования в reminder_handler
+             # Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
+            try:
+                new_row = [[
+                    poll_msg.poll.id,
+                    group["name"],  # можно заменить на group_value, если хочешь названия из таблицы
+                    "", "", "", "", ""  # пустые ячейки под user_id, username, время и ответ
+                ]]
+                sheets_service.values().append(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range="Опросы!A1",  # ⬅️ явное указание вкладки
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": new_row}
+                ).execute()
+            except Exception as e:
+                logging.warning(f"❗ Не удалось записать poll_id: {e}")
 
-            context.bot_data[poll_msg.poll.id] = poll_msg.poll  # ⬅️ сохраняем опрос
+
+            context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  # 👈 вот это добавь
             poll_to_group[poll_msg.poll.id] = group             # ⬅️ сохраняем группу
-            # context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  # 👈 вот это добавь
             
             # await schedule_reminder(context.application, group, poll_msg.poll.id)
         
