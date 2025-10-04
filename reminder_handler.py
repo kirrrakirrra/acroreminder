@@ -55,19 +55,6 @@ async def handle_poll_answer(update, context):
     group_name = poll_to_group.get(poll_id, {}).get("name", "?")
     logging.info(f"📝 Ответ от пользователя для группы: {group_name}")
 
-
-    # # Загружаем список всех опросов, чтобы найти название группы по poll_id
-    # group_name = "?"
-    # try:
-    #     result = sheets_service.values().get(
-    #         spreadsheetId=SPREADSHEET_ID,
-    #         range=SURVEY_SHEET + "!A2:B"
-    #     ).execute()
-    #     all_rows = result.get("values", [])
-    #     group_name = next((row[1] for row in all_rows if row[0] == poll_id), "?")
-    # except Exception as e:
-    #     logging.warning(f"❗ Ошибка при получении group_name по poll_id: {e}")
-
     # Пишем в память (резервно)
     if poll_id not in poll_votes:
         poll_votes[poll_id] = set()
@@ -137,7 +124,7 @@ async def send_admin_report(app, poll_id):
             if len(row) < idx_voted:
                 continue
             group_col = row[idx_group].strip()
-            if group_col != group_name_table:
+            if group_col != group_name_code:
                 continue
             name = row[idx_name].strip()
             parent_name = row[idx_parent].strip() if len(row) > idx_parent else ""
@@ -155,7 +142,7 @@ async def send_admin_report(app, poll_id):
                     mention += f" (@{username})"
                 missed.append(mention)
             
-        parts = [f"📋 *Отчёт по группе* {group_name_code}:"]
+        parts = [f"📋 *Отчёт * {group_name_code}:"]
         if missed:
             parts.append(f"⁉️ Не отметились: {len(missed)}\n" + "\n".join(missed))
         if paused:
