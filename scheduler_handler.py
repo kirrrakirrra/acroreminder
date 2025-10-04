@@ -9,7 +9,7 @@ import asyncio
 import os
 import logging
 
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # переменная должна быть в Render Environment
 SHEET_RANGE = 'Абонементы!A1:W'  # до колонки W включительно
