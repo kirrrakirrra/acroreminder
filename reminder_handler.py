@@ -137,8 +137,8 @@ async def send_admin_report(app, poll_id):
             group_col = row[idx_group].strip()
             if group_col != group_name_code:
                 continue
-            name = row[idx_name].strip().replace("_", " ")
-            parent_name = row[idx_parent].strip().replace("_", " ") if len(row) > idx_parent else ""
+            name = row[idx_name].strip()
+            parent_name = row[idx_parent].strip() if len(row) > idx_parent else ""
             username = escape_md(row[idx_username].strip()) if len(row) > idx_username else ""
             pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
             voted = row[idx_voted].strip().lower()
@@ -166,30 +166,26 @@ async def send_admin_report(app, poll_id):
 
         # === Те, кто проголосовал ===
         if voted_by_subscription:
-            parts.append(f"✅ *По абонементу ({len(voted_by_subscription)}):*\n" + "\n".join(voted_by_subscription))
+            parts.append(f"✅ *По абонементу ({len(voted_by_subscription)}):*\n\n" + "\n".join(voted_by_subscription))
         if voted_by_one_time:
-            parts.append("")  # пустая строка между блоками
-            parts.append(f"💵 *Разово ({len(voted_by_one_time)}):*\n" + "\n".join(voted_by_one_time))
+            parts.append(f"💵 *Разово ({len(voted_by_one_time)}):*\n\n" + "\n".join(voted_by_one_time))
         if voted_absent:
-            parts.append("")  # пустая строка между блоками
-            parts.append(f"❌ *Пропускают ({len(voted_absent)}):*\n" + "\n".join(voted_absent))
+            parts.append(f"❌ *Пропускают ({len(voted_absent)}):*\n\n" + "\n".join(voted_absent))
         
         # === Разделитель ===
-        parts.append("\n-------------------------\n")
+        parts.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
         
         # === Не отметились ===
         parts.append("⁉️ *Не отметились:*")
         
         if not_voted_subscription:
-            parts.append(f"🎟 *Абонементы ({len(not_voted_subscription)}):*\n" + "\n".join(not_voted_subscription))
+            parts.append(f"🎟 *Абонементы ({len(not_voted_subscription)}):*\n\n" + "\n".join(not_voted_subscription))
         
         if not_voted_paused:
-            parts.append("")  # пустая строка между блоками
-            parts.append(f"⏸ *На паузе ({len(not_voted_paused)}):*\n" + "\n".join(not_voted_paused))
+            parts.append(f"⏸ *На паузе ({len(not_voted_paused)}):*\n\n" + "\n".join(not_voted_paused))
         
         if not_voted_one_time:
-            parts.append("")  # пустая строка между блоками
-            parts.append(f"💵 *Ходят разово ({len(not_voted_one_time)}):*\n" + "\n".join(not_voted_one_time))
+            parts.append(f"💵 *Ходят разово ({len(not_voted_one_time)}):*\n\n" + "\n".join(not_voted_one_time))
 
         
         report = "\n\n".join(parts)
