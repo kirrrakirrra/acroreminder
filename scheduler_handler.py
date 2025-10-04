@@ -3,7 +3,7 @@ from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group
-# from reminder_handler import schedule_report
+from reminder_handler import schedule_report
 import datetime
 import asyncio
 import os
@@ -263,19 +263,19 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  # 👈 вот это добавь
             poll_to_group[poll_msg.poll.id] = group             # ⬅️ сохраняем группу
             
-            # await schedule_report(context.application, group, poll_msg.poll.id)
+            context.application.create_task(schedule_report(context.application, group, poll_msg.poll.id))
         
         except Exception as e:
             logging.warning(f"❗ Не удалось отправить опрос: {e}")
         
-        # finally:
-        #     # 🔧 Убираем кнопки В ЛЮБОМ СЛУЧАЕ
-        #     try:
-        #         logging.info("🧼 Убираем кнопки после ответа администратора")
-        #         await query.edit_message_text("Напоминание и опрос отправлены ✅")
-        #     except Exception as e:
-        #         logging.warning(f"⚠️ Не удалось изменить сообщение с кнопками: {e}")
-        await query.edit_message_text("Напоминание и опрос отправлены ✅")
+        finally:
+            # 🔧 Убираем кнопки В ЛЮБОМ СЛУЧАЕ
+            try:
+                logging.info("🧼 Убираем кнопки после ответа администратора")
+                await query.edit_message_text("Напоминание и опрос отправлены ✅")
+            except Exception as e:
+                logging.warning(f"⚠️ Не удалось изменить сообщение с кнопками: {e}")
+        # await query.edit_message_text("Напоминание и опрос отправлены ✅")
     elif action == "skip":
         await query.edit_message_text("❌ Окей, ничего не публикуем.\nНапоминание: не забудьте сами сообщить группе о деталях отмены")
     pass
