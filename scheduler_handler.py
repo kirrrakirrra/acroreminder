@@ -3,7 +3,7 @@ from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group
-from reminder_handler import schedule_reminder
+# from reminder_handler import schedule_reminder
 import datetime
 import asyncio
 import os
@@ -264,7 +264,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  # 👈 вот это добавь
             poll_to_group[poll_msg.poll.id] = group             # ⬅️ сохраняем группу
             
-            await schedule_reminder(context.application, group, poll_msg.poll.id)
+            # await schedule_reminder(context.application, group, poll_msg.poll.id)
         
         except Exception as e:
             logging.warning(f"❗ Не удалось отправить опрос: {e}")
