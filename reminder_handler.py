@@ -107,6 +107,7 @@ async def send_admin_report(app, poll_id):
     logging.info(f"📤 Готовим отчёт по poll_id={poll_id} для группы: {group['name']}")
     group = poll_to_group.get(poll_id)
     if not group:
+        logging.warning(f"⚠️ Не найдена группа для poll_id={poll_id}")
         return
 
     try:
@@ -168,6 +169,7 @@ async def send_admin_report(app, poll_id):
         
         report = "\n\n".join(parts)
         
+        logging.info(f"📤 Отправка отчета админу:\n{report}")
         await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
     
     except Exception as e:
