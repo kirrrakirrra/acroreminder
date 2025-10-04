@@ -107,21 +107,26 @@ async def send_admin_report(app, poll_id):
             range=USERNAMES_SHEET + "!A2:M"
         ).execute()
         rows = resp.get("values", [])
-        
-        paused = []
-        one_time = []
-        missed = []
 
-        # idx_group = 0
         idx_name = 1
         idx_username = 2
         idx_parent = 7
         idx_pause = 9
         idx_voted = 10
         idx_group = 11
+
+        # Категории: кто как проголосовал
+        voted_by_subscription = []
+        voted_by_one_time = []
+        voted_absent = []
+
+        # Кто не проголосовал — делим на 3 категории
+        not_voted_subscription = []
+        not_voted_paused = []
+        not_voted_one_time = []
         
         for row in rows:
-            if len(row) < idx_voted:
+            if len(row) < idx_group:
                 continue
             group_col = row[idx_group].strip()
             if group_col != group_name_code:
@@ -130,25 +135,44 @@ async def send_admin_report(app, poll_id):
             parent_name = row[idx_parent].strip() if len(row) > idx_parent else ""
             username = row[idx_username].strip() if len(row) > idx_username else ""
             pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
-            voted = row[idx_voted].strip()
-            
-            if pause == "TRUE":
-                paused.append(f"{name} — {parent_name}")
-            elif pause == "РАЗОВО":
-                one_time.append(f"{name} — {parent_name}")
+            voted = row[idx_voted].strip().lower()
+
+            parent_info = f"👤 {parent_name}"
+            if username:
+                parent_info += f" (@{username})"
+            child_info = f"🧒 {name} — {parent_info}"
+
+            if voted == "✅ Будем по абонементу":
+                voted_by_subscription.append(child_info)
+            elif voted == "🤸🏻‍♀️ Будем разово":
+                voted_by_one_time.append(child_info)
+            elif voted == "❌ Пропускаем":
+                voted_absent.append(child_info)
             elif not voted:
-                mention = f"{name} — {parent_name}"
-                if username:
-                    mention += f" (@{username})"
-                missed.append(mention)
+                if pause == "TRUE":
+                    not_voted_paused.append(child_info)
+                elif pause == "РАЗОВО":
+                    not_voted_one_time.append(child_info)
+                else:
+                    not_voted_subscription.append(child_info)
             
         parts = [f"📋 *Отчёт * {group_name_code}:"]
-        if missed:
-            parts.append(f"⁉️ Не отметились: {len(missed)}\n" + "\n".join(missed))
-        if paused:
-            parts.append(f"⏸ На паузе: {', '.join(paused)}")
-        if one_time:
-            parts.append(f"💵 Разово: {', '.join(one_time)}")
+        if voted_by_subscription:
+            parts.append("✅ *По абонементу:*\n" + "\n".join(voted_by_subscription))
+        if voted_by_one_time:
+            parts.append("💵 *Разово:*\n" + "\n".join(voted_by_one_time))
+        if voted_absent:
+            parts.append("❌ *Пропускают:*\n" + "\n".join(voted_absent))
+
+        if not_voted_subscription or not_voted_paused or not_voted_one_time:
+            not_voted_section = ["⁉️ *Не отметились:*"]
+            if not_voted_subscription:
+                not_voted_section.append("🎟 *Абонементы:*\n" + "\n".join(not_voted_subscription))
+            if not_voted_paused:
+                not_voted_section.append("⏸ *На паузе:*\n" + "\n".join(not_voted_paused))
+            if not_voted_one_time:
+                not_voted_section.append("💵 *Ходят разово:*\n" + "\n".join(not_voted_one_time))
+            parts.append("\n".join(not_voted_section))
         
         report = "\n\n".join(parts)
         
