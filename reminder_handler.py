@@ -104,11 +104,11 @@ async def schedule_report(app, group, poll_id):
 
 # Отправка отчёта админу через delay_minutes 
 async def send_admin_report(app, poll_id):
-    logging.info(f"📤 Готовим отчёт по poll_id={poll_id} для группы: {group['name']}")
     group = poll_to_group.get(poll_id)
     if not group:
         logging.warning(f"⚠️ Не найдена группа для poll_id={poll_id}")
         return
+    logging.info(f"📤 Готовим отчёт по poll_id={poll_id} для группы: {group['name']}")
 
     try:
         from scheduler_handler import ADMIN_ID
@@ -122,7 +122,7 @@ async def send_admin_report(app, poll_id):
 
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=USERNAMES_SHEET + "!A2:K"
+            range=USERNAMES_SHEET + "!A2:M"
         ).execute()
         rows = resp.get("values", [])
         
@@ -130,12 +130,13 @@ async def send_admin_report(app, poll_id):
         one_time = []
         missed = []
 
-        idx_group = 0
+        # idx_group = 0
         idx_name = 1
         idx_username = 2
         idx_parent = 7
         idx_pause = 9
         idx_voted = 10
+        idx_group = 11
         
         for row in rows:
             if len(row) < idx_voted:
