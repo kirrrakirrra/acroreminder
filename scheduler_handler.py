@@ -234,6 +234,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
         # Опрос
         try:
+            logging.info(f"📤 Отправляем опрос в группу: {group['name']} (thread_id={group['thread_id']})")
             poll_msg = await context.bot.send_poll(
                 chat_id=GROUP_ID,
                 question="Кто будет сегодня на занятии?",
