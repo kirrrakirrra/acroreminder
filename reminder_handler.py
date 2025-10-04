@@ -114,11 +114,6 @@ async def send_admin_report(app, poll_id):
         from scheduler_handler import ADMIN_ID
         
         group_name_code = group["name"]
-        group_name_table = {
-            "Старшей начинающей группы": "6-9 лет начинающие",
-            "Старшей продолжающей группы": "6-9 лет продолжающие",
-            "Младшей группы": "4-5 лет"
-        }.get(group_name_code, group_name_code)
 
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
