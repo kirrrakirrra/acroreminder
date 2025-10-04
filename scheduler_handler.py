@@ -234,7 +234,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
         # Опрос
         try:
-            logging.info(f"📤 Отправляем опрос в группу: {group['name']} (thread_id={group['thread_id']})")
             poll_msg = await context.bot.send_poll(
                 chat_id=GROUP_ID,
                 question="Кто будет сегодня на занятии?",
@@ -261,7 +260,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.warning(f"❗ Не удалось записать poll_id: {e}")
 
-
             context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  # 👈 вот это добавь
             poll_to_group[poll_msg.poll.id] = group             # ⬅️ сохраняем группу
             
@@ -277,7 +275,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("Напоминание и опрос отправлены ✅")
             except Exception as e:
                 logging.warning(f"⚠️ Не удалось изменить сообщение с кнопками: {e}")
-
+        # await query.edit_message_text("Напоминание и опрос отправлены ✅")
     elif action == "skip":
         await query.edit_message_text("❌ Окей, ничего не публикуем.\nНапоминание: не забудьте сами сообщить группе о деталях отмены")
     pass
