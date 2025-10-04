@@ -4,7 +4,7 @@ import os
 from telegram.constants import ParseMode
 from datetime import datetime
 
-delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 60))
+delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 5))
 
 # Хранилище голосов в памяти (резервный вариант)
 poll_votes = {}
@@ -104,6 +104,7 @@ async def schedule_report(app, group, poll_id):
 
 # Отправка отчёта админу через delay_minutes 
 async def send_admin_report(app, poll_id):
+    logging.info(f"📤 Готовим отчёт по poll_id={poll_id} для группы: {group['name']}")
     group = poll_to_group.get(poll_id)
     if not group:
         return
@@ -127,25 +128,35 @@ async def send_admin_report(app, poll_id):
         paused = []
         one_time = []
         missed = []
+
+        idx_group = 0
+        idx_name = 1
+        idx_username = 2
+        idx_parent = 7
+        idx_pause = 9
+        idx_voted = 10
         
         for row in rows:
-            if len(row) < 11:
+            if len(row) < idx_voted:
                 continue
-            group_col = row[0].strip()
+            group_col = row[idx_group].strip()
             if group_col != group_name_table:
                 continue
-            name = row[1].strip()
-            parent_name = row[7].strip() if len(row) > 7 else ""
-            username = row[2].strip() if len(row) > 2 else ""
-            status = row[10].strip().upper()
-            voted = row[10] if len(row) > 10 else ""
+            name = row[idx_name].strip()
+            parent_name = row[idx_parent].strip() if len(row) > idx_parent else ""
+            username = row[idx_username].strip() if len(row) > idx_username else ""
+            pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
+            voted = row[idx_voted].strip()
             
-            if status == "TRUE":
+            if pause == "TRUE":
                 paused.append(f"{name} — {parent_name}")
-            elif status == "РАЗОВО":
+            elif pause == "РАЗОВО":
                 one_time.append(f"{name} — {parent_name}")
-            elif not row[10].strip():
-                missed.append(f"{name} — {parent_name} (@{username})")
+            elif not voted:
+                mention = f"{name} — {parent_name}"
+                if username:
+                    mention += f" (@{username})"
+                missed.append(mention)
             
         parts = [f"📋 *Отчёт по группе* {group_name_code}:"]
         if missed:
