@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from telegram.constants import ParseMode
 from datetime import datetime
 
@@ -88,7 +89,12 @@ async def schedule_report(app, group, poll_id):
     await asyncio.sleep(60 * delay_minutes)
     await send_admin_report(app, poll_id)
 
-
+def escape_md(text):
+    """
+    Экранирует спецсимволы Markdown (v1), чтобы избежать ошибок Telegram.
+    """
+    return re.sub(r'([_*[\]()])', r'\\\1', text)
+    
 # Отправка отчёта админу через delay_minutes 
 async def send_admin_report(app, poll_id):
     group = poll_to_group.get(poll_id)
@@ -133,7 +139,7 @@ async def send_admin_report(app, poll_id):
                 continue
             name = row[idx_name].strip().replace("_", " ")
             parent_name = row[idx_parent].strip().replace("_", " ") if len(row) > idx_parent else ""
-            username = row[idx_username].strip() if len(row) > idx_username else ""
+            username = escape_md(row[idx_username].strip()) if len(row) > idx_username else ""
             pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
             voted = row[idx_voted].strip().lower()
 
