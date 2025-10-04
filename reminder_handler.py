@@ -96,74 +96,68 @@ async def handle_poll_answer(update, context):
 
 # Планируем отправку отчета
 async def schedule_report(app, group, poll_id):
-poll_to_group[poll_id] = group
-await asyncio.sleep(60 * delay_minutes)
-await send_admin_report(app, poll_id)
+    poll_to_group[poll_id] = group
+    await asyncio.sleep(60 * delay_minutes)
+    await send_admin_report(app, poll_id)
 
 
 # Отправка отчёта админу через delay_minutes 
 async def send_admin_report(app, poll_id):
-group = poll_to_group.get(poll_id)
-if not group:
-return
+    group = poll_to_group.get(poll_id)
+    if not group:
+        return
 
+    try:
+        from scheduler_handler import ADMIN_ID
+        
+        group_name_code = group["name"]
+        group_name_table = {
+            "Старшей начинающей группы": "6-9 лет начинающие",
+            "Старшей продолжающей группы": "6-9 лет продолжающие",
+            "Младшей группы": "4-5 лет"
+        }.get(group_name_code, group_name_code)
 
-try:
-from scheduler_handler import ADMIN_ID
-
-
-group_name_code = group["name"]
-group_name_table = {
-"Старшей начинающей группы": "6-9 лет начинающие",
-"Старшей продолжающей группы": "6-9 лет продолжающие",
-"Младшей группы": "4-5 лет"
-}.get(group_name_code, group_name_code)
-
-
-resp = sheets_service.values().get(
-spreadsheetId=SPREADSHEET_ID,
-range=USERNAMES_SHEET + "!A2:K"
-).execute()
-rows = resp.get("values", [])
-
-
-paused = []
-one_time = []
-missed = []
-
-
-for row in rows:
-if len(row) < 11:
-continue
-group_col = row[0].strip()
-if group_col != group_name_table:
-continue
-name = row[1].strip()
-parent_name = row[7].strip() if len(row) > 7 else ""
-username = row[2].strip() if len(row) > 2 else ""
-status = row[10].strip().upper()
-voted = row[10] if len(row) > 10 else ""
-
-
-if status == "TRUE":
-paused.append(f"{name} — {parent_name}")
-elif status == "РАЗОВО":
-one_time.append(f"{name} — {parent_name}")
-elif not row[10].strip():
-missed.append(f"{name} — {parent_name} (@{username})")
-
-parts = [f"📋 *Отчёт по группе* {group_name_code}:"]
-if missed:
-parts.append(f"⁉️ Не отметились: {len(missed)}\n" + "\n".join(missed))
-if paused:
-parts.append(f"⏸ На паузе: {', '.join(paused)}")
-if one_time:
-parts.append(f"💵 Разово: {', '.join(one_time)}")
-
-report = "\n\n".join(parts)
-
-await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
-
-except Exception as e:
-logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
+        resp = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=USERNAMES_SHEET + "!A2:K"
+        ).execute()
+        rows = resp.get("values", [])
+        
+        paused = []
+        one_time = []
+        missed = []
+        
+        for row in rows:
+            if len(row) < 11:
+                continue
+            group_col = row[0].strip()
+            if group_col != group_name_table:
+                continue
+            name = row[1].strip()
+            parent_name = row[7].strip() if len(row) > 7 else ""
+            username = row[2].strip() if len(row) > 2 else ""
+            status = row[10].strip().upper()
+            voted = row[10] if len(row) > 10 else ""
+            
+            if status == "TRUE":
+                paused.append(f"{name} — {parent_name}")
+            elif status == "РАЗОВО":
+                one_time.append(f"{name} — {parent_name}")
+            elif not row[10].strip():
+                missed.append(f"{name} — {parent_name} (@{username})")
+            
+        parts = [f"📋 *Отчёт по группе* {group_name_code}:"]
+        if missed:
+            parts.append(f"⁉️ Не отметились: {len(missed)}\n" + "\n".join(missed))
+        if paused:
+            parts.append(f"⏸ На паузе: {', '.join(paused)}")
+        if one_time:
+            parts.append(f"💵 Разово: {', '.join(one_time)}")
+        
+        report = "\n\n".join(parts)
+        
+        await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
+    
+    except Exception as e:
+        logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
         
