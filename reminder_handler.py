@@ -173,7 +173,7 @@ async def send_admin_report(app, poll_id):
             parts.append(f"==> ❌ *Пропускают ({len(voted_absent)}):*\n\n" + "\n".join(voted_absent))
         
         # === Не отметились ===
-        parts.append("----- ⁉️ *Не отметились:* -----")
+        parts.append("--------- ⁉️ *Не отметились:* ---------")
         
         if not_voted_subscription:
             parts.append(f"==> 🎟 *Абонементы ({len(not_voted_subscription)}):*\n\n" + "\n".join(not_voted_subscription))
