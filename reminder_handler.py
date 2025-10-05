@@ -189,7 +189,28 @@ async def send_admin_report(app, poll_id):
         
         logging.info(f"📤 Отправка отчета админу:\n{report}")
         await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
-    
+       
+        # 📤 Отправка второго сообщения — упоминания
+        mentions = []
+        
+        for row in rows:
+            if len(row) < idx_group:
+                continue
+            group_col = row[idx_group].strip()
+            if group_col != group_name_code:
+                continue
+        
+            pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
+            voted = row[idx_voted].strip()
+            username = row[idx_username].strip() if len(row) > idx_username else ""
+        
+            if not voted and pause != "TRUE" and pause != "РАЗОВО" and username:
+                mentions.append(f"@{username}")
+        
+        if mentions:
+            mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
+            await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
+
     except Exception as e:
         logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
         
