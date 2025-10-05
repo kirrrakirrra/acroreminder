@@ -37,7 +37,7 @@ groups = [
     },
     {
         "name": "Старшей продолжающей группы",
-        "days": ["Monday", "Wednesday", "Friday","Saturday",],
+        "days": ["Monday", "Wednesday", "Friday","Sunday",],
         "time": "18:30",
         # "thread_id": 7,
         "thread_id": 362,
