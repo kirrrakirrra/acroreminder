@@ -32,22 +32,22 @@ groups = [
         "name": "Старшей начинающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "17:15",
-        # "thread_id": 2225,
-        "thread_id": 105,
+        "thread_id": 2225,
+        # "thread_id": 105,
     },
     {
         "name": "Старшей продолжающей группы",
-        "days": ["Monday", "Wednesday", "Friday","Sunday",],
+        "days": ["Monday", "Wednesday", "Friday",],
         "time": "18:30",
-        # "thread_id": 7,
-        "thread_id": 362,
+        "thread_id": 7,
+        # "thread_id": 362,
     },
     {
         "name": "Младшей группы",
-        "days": ["Tuesday", "Thursday","Saturday",],
+        "days": ["Tuesday", "Thursday",],
         "time": "17:30",
-        # "thread_id": 2226,
-         "thread_id": 362,
+        "thread_id": 2226,
+        # "thread_id": 362,
     },
 ]
 
@@ -131,7 +131,7 @@ async def check_expired_subscriptions(app, today_group_names):
                             dates_text = "\n".join([f"• {d}" for d in dates]) if dates else "—"
         
                             msg = (
-                                f"✅ Абонемент завершён:\n"
+                                f"✅ *Абонемент завершён*:\n"
                                 f"👤 *Имя*: {name}\n"
                                 f"🏷️ *Группа*: {sub['group']}\n"
                                 f"☑️ *Использовано*: 8 из 8\n"
