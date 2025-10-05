@@ -146,7 +146,7 @@ async def send_admin_report(app, poll_id):
             parent_info = f"👤 {parent_name}"
             if username:
                 parent_info += f" (@{username})"
-            child_info = f"🧒 {name} — {parent_info}"
+            child_info = f"🧒 {name}\n  {parent_info}"
 
             if "по абонементу" in voted:
                 voted_by_subscription.append(child_info)
@@ -162,30 +162,30 @@ async def send_admin_report(app, poll_id):
                 else:
                     not_voted_subscription.append(child_info)
             
-        parts = [f"📋 *Отчёт {group_name_code}:*"]
+        parts = [f"📋 __Отчёт {group_name_code}:__"]
 
         # === Те, кто проголосовал ===
         if voted_by_subscription:
-            parts.append(f"✅ *По абонементу ({len(voted_by_subscription)}):*\n\n" + "\n".join(voted_by_subscription))
+            parts.append(f"✅ __По абонементу ({len(voted_by_subscription)}):__\n\n" + "\n".join(voted_by_subscription))
         if voted_by_one_time:
-            parts.append(f"💵 *Разово ({len(voted_by_one_time)}):*\n\n" + "\n".join(voted_by_one_time))
+            parts.append(f"💵 __Разово ({len(voted_by_one_time)}):__\n\n" + "\n".join(voted_by_one_time))
         if voted_absent:
-            parts.append(f"❌ *Пропускают ({len(voted_absent)}):*\n\n" + "\n".join(voted_absent))
+            parts.append(f"❌ __Пропускают ({len(voted_absent)}):__\n" + "\n".join(voted_absent))
         
         # === Разделитель ===
         parts.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
         
         # === Не отметились ===
-        parts.append("⁉️ *Не отметились:*")
+        parts.append("⁉️ __Не отметились:__")
         
         if not_voted_subscription:
-            parts.append(f"🎟 *Абонементы ({len(not_voted_subscription)}):*\n\n" + "\n".join(not_voted_subscription))
+            parts.append(f"🎟 __Абонементы ({len(not_voted_subscription)}):__\n\n" + "\n".join(not_voted_subscription))
         
         if not_voted_paused:
-            parts.append(f"⏸ *На паузе ({len(not_voted_paused)}):*\n\n" + "\n".join(not_voted_paused))
+            parts.append(f"⏸ __На паузе ({len(not_voted_paused)}):__\n\n" + "\n".join(not_voted_paused))
         
         if not_voted_one_time:
-            parts.append(f"💵 *Ходят разово ({len(not_voted_one_time)}):*\n\n" + "\n".join(not_voted_one_time))
+            parts.append(f"💵 __Ходят разово ({len(not_voted_one_time)}):__\n\n" + "\n".join(not_voted_one_time))
 
         
         report = "\n\n".join(parts)
