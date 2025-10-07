@@ -130,7 +130,10 @@ async def send_admin_report(app, poll_id):
         not_voted_subscription = []
         not_voted_paused = []
         not_voted_one_time = []
-        
+
+        for i, row in enumerate(rows, start=1):
+            logging.info(f"[DEBUG] Row {i}: length={len(row)} | values={row}")
+    
         for row in rows:
             if len(row) < idx_group:
                 continue
