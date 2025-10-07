@@ -110,6 +110,13 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         start = row[idx_start] if len(row) > idx_start else "—"
         end = row[idx_end] if len(row) > idx_end else "—"
         used = row[idx_used] if len(row) > idx_used else "0"
+        # Если абонемент завершён (8 из 8)
+        abonement_finished = ""
+        try:
+            if int(used) == 8:
+                abonement_finished = "\n\n🔚 *Абонемент завершён*"
+        except:
+            pass
        # Вставка дополнительной строки при наличии значения в "Разница"
         remaining_info = ""
         if len(row) > idx_diff and row[idx_diff].strip():
@@ -149,6 +156,7 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📆 *Срок действия:* `{start} — {end}`\n"
             f"✅ *Использовано:* `{used}` из `8`\n"
             f"📅 *Даты посещений:*\n{dates_text}"
+            f"{abonement_finished}" 
             f"{remaining_info}"
             f"{expired_warning}"
         )
