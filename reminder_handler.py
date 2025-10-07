@@ -143,11 +143,11 @@ async def send_admin_report(app, poll_id):
             if group_col != group_name_code:
                 continue
         
-            name = safe_get(row, idx_name)
-            parent_name = safe_get(row, idx_parent)
-            username = escape_md(safe_get(row, idx_username))
-            pause = safe_get(row, idx_pause).upper()
-            voted = safe_get(row, idx_voted)
+            name = safe_get(row, idx_name).strip()
+            parent_name = safe_get(row, idx_parent).strip()
+            username = escape_md(safe_get(row, idx_username).strip())
+            pause = safe_get(row, idx_pause).strip().upper()
+            voted = safe_get(row, idx_voted).strip().lower()
         
             parent_info = f"👤 {parent_name}"
             if username:
