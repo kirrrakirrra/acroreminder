@@ -121,36 +121,39 @@ async def send_admin_report(app, poll_id):
         idx_voted = 10
         idx_group = 11
 
-        # Категории: кто как проголосовал
+        def safe_get(row, idx, default=""):
+            return row[idx].strip() if len(row) > idx and row[idx] else default
+        
+        # Лог строк для отладки
+        for i, row in enumerate(rows, start=1):
+            logging.info(f"[DEBUG] Row {i}: length={len(row)} | values={row}")
+        
+        # Кто как проголосовал
         voted_by_subscription = []
         voted_by_one_time = []
         voted_absent = []
-
-        # Кто не проголосовал — делим на 3 категории
         not_voted_subscription = []
         not_voted_paused = []
         not_voted_one_time = []
-
-        for i, row in enumerate(rows, start=1):
-            logging.info(f"[DEBUG] Row {i}: length={len(row)} | values={row}")
-    
+        
         for row in rows:
             if len(row) < idx_group:
                 continue
-            group_col = row[idx_group].strip() if idx_group < len(row) else ""
+            group_col = safe_get(row, idx_group)
             if group_col != group_name_code:
                 continue
-            name = row[idx_name].strip() if idx_name < len(row) else ""
-            parent_name = row[idx_parent].strip() if idx_parent < len(row) else ""
-            username = escape_md(row[idx_username].strip()) if idx_username < len(row) else ""
-            pause = row[idx_pause].strip().upper() if idx_pause < len(row) else ""
-            voted = row[idx_voted].strip() if idx_voted < len(row) else ""
-
+        
+            name = safe_get(row, idx_name)
+            parent_name = safe_get(row, idx_parent)
+            username = escape_md(safe_get(row, idx_username))
+            pause = safe_get(row, idx_pause).upper()
+            voted = safe_get(row, idx_voted)
+        
             parent_info = f"👤 {parent_name}"
             if username:
                 parent_info += f" (@{username})"
             child_info = f"🧒 {name}\n    {parent_info}"
-
+        
             if "по абонементу" in voted:
                 voted_by_subscription.append(child_info)
             elif "разово" in voted:
@@ -164,10 +167,9 @@ async def send_admin_report(app, poll_id):
                     not_voted_one_time.append(child_info)
                 else:
                     not_voted_subscription.append(child_info)
-            
+        
         parts = [f"📋 *Отчёт {group_name_code}:*"]
-
-        # === Те, кто проголосовал ===
+        
         if voted_by_subscription:
             parts.append(f"==> ✅ *По абонементу ({len(voted_by_subscription)}):*\n\n" + "\n".join(voted_by_subscription))
         if voted_by_one_time:
@@ -175,37 +177,31 @@ async def send_admin_report(app, poll_id):
         if voted_absent:
             parts.append(f"==> ❌ *Пропускают ({len(voted_absent)}):*\n\n" + "\n".join(voted_absent))
         
-        # === Не отметились ===
         parts.append("--------- ⁉️ *Не отметились:* ---------")
         
         if not_voted_subscription:
             parts.append(f"==> 🎟 *Абонементы ({len(not_voted_subscription)}):*\n\n" + "\n".join(not_voted_subscription))
-        
         if not_voted_paused:
             parts.append(f"==> ⏸ *На паузе ({len(not_voted_paused)}):*\n\n" + "\n".join(not_voted_paused))
-        
         if not_voted_one_time:
             parts.append(f"==> 💵 *Ходят разово ({len(not_voted_one_time)}):*\n\n" + "\n".join(not_voted_one_time))
-
         
         report = "\n\n".join(parts)
-        
         logging.info(f"📤 Отправка отчета админу:\n{report}")
         await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
-       
-        # 📤 Отправка второго сообщения — упоминания
-        mentions = []
         
+        # Второе сообщение: пинг
+        mentions = []
         for row in rows:
             if len(row) < idx_group:
                 continue
-            group_col = row[idx_group].strip()
+            group_col = safe_get(row, idx_group)
             if group_col != group_name_code:
                 continue
         
-            pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
-            voted = row[idx_voted].strip()
-            username = row[idx_username].strip() if len(row) > idx_username else ""
+            pause = safe_get(row, idx_pause).upper()
+            voted = safe_get(row, idx_voted)
+            username = safe_get(row, idx_username)
         
             if not voted and pause != "TRUE" and pause != "РАЗОВО" and username:
                 mentions.append(f"@{username}")
@@ -213,6 +209,99 @@ async def send_admin_report(app, poll_id):
         if mentions:
             mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
             await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
+
+        # # Категории: кто как проголосовал
+        # voted_by_subscription = []
+        # voted_by_one_time = []
+        # voted_absent = []
+
+        # # Кто не проголосовал — делим на 3 категории
+        # not_voted_subscription = []
+        # not_voted_paused = []
+        # not_voted_one_time = []
+
+        # for i, row in enumerate(rows, start=1):
+        #     logging.info(f"[DEBUG] Row {i}: length={len(row)} | values={row}")
+    
+        # for row in rows:
+        #     if len(row) < idx_group:
+        #         continue
+        #     group_col = row[idx_group].strip() if idx_group < len(row) else ""
+        #     if group_col != group_name_code:
+        #         continue
+        #     name = row[idx_name].strip() if idx_name < len(row) else ""
+        #     parent_name = row[idx_parent].strip() if idx_parent < len(row) else ""
+        #     username = escape_md(row[idx_username].strip()) if idx_username < len(row) else ""
+        #     pause = row[idx_pause].strip().upper() if idx_pause < len(row) else ""
+        #     voted = row[idx_voted].strip() if idx_voted < len(row) else ""
+
+        #     parent_info = f"👤 {parent_name}"
+        #     if username:
+        #         parent_info += f" (@{username})"
+        #     child_info = f"🧒 {name}\n    {parent_info}"
+
+        #     if "по абонементу" in voted:
+        #         voted_by_subscription.append(child_info)
+        #     elif "разово" in voted:
+        #         voted_by_one_time.append(child_info)
+        #     elif "пропускаем" in voted:
+        #         voted_absent.append(child_info)
+        #     elif not voted:
+        #         if pause == "TRUE":
+        #             not_voted_paused.append(child_info)
+        #         elif pause == "РАЗОВО":
+        #             not_voted_one_time.append(child_info)
+        #         else:
+        #             not_voted_subscription.append(child_info)
+            
+        # parts = [f"📋 *Отчёт {group_name_code}:*"]
+
+        # # === Те, кто проголосовал ===
+        # if voted_by_subscription:
+        #     parts.append(f"==> ✅ *По абонементу ({len(voted_by_subscription)}):*\n\n" + "\n".join(voted_by_subscription))
+        # if voted_by_one_time:
+        #     parts.append(f"==> 💵 *Разово ({len(voted_by_one_time)}):*\n\n" + "\n".join(voted_by_one_time))
+        # if voted_absent:
+        #     parts.append(f"==> ❌ *Пропускают ({len(voted_absent)}):*\n\n" + "\n".join(voted_absent))
+        
+        # # === Не отметились ===
+        # parts.append("--------- ⁉️ *Не отметились:* ---------")
+        
+        # if not_voted_subscription:
+        #     parts.append(f"==> 🎟 *Абонементы ({len(not_voted_subscription)}):*\n\n" + "\n".join(not_voted_subscription))
+        
+        # if not_voted_paused:
+        #     parts.append(f"==> ⏸ *На паузе ({len(not_voted_paused)}):*\n\n" + "\n".join(not_voted_paused))
+        
+        # if not_voted_one_time:
+        #     parts.append(f"==> 💵 *Ходят разово ({len(not_voted_one_time)}):*\n\n" + "\n".join(not_voted_one_time))
+
+        
+        # report = "\n\n".join(parts)
+        
+        # logging.info(f"📤 Отправка отчета админу:\n{report}")
+        # await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
+       
+        # # 📤 Отправка второго сообщения — упоминания
+        # mentions = []
+        
+        # for row in rows:
+        #     if len(row) < idx_group:
+        #         continue
+        #     group_col = row[idx_group].strip()
+        #     if group_col != group_name_code:
+        #         continue
+        
+        #     pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
+        #     voted = row[idx_voted].strip()
+        #     username = row[idx_username].strip() if len(row) > idx_username else ""
+        
+        #     if not voted and pause != "TRUE" and pause != "РАЗОВО" and username:
+        #         mentions.append(f"@{username}")
+        
+        # if mentions:
+        #     mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
+        #     await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
 
     except Exception as e:
         logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
