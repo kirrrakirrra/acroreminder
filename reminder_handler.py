@@ -134,14 +134,14 @@ async def send_admin_report(app, poll_id):
         for row in rows:
             if len(row) < idx_group:
                 continue
-            group_col = row[idx_group].strip()
+            group_col = row[idx_group].strip() if idx_group < len(row) else ""
             if group_col != group_name_code:
                 continue
-            name = row[idx_name].strip()
-            parent_name = row[idx_parent].strip() if len(row) > idx_parent else ""
-            username = escape_md(row[idx_username].strip()) if len(row) > idx_username else ""
-            pause = row[idx_pause].strip().upper() if len(row) > idx_pause else ""
-            voted = row[idx_voted].strip().lower()
+            name = row[idx_name].strip() if idx_name < len(row) else ""
+            parent_name = row[idx_parent].strip() if idx_parent < len(row) else ""
+            username = escape_md(row[idx_username].strip()) if idx_username < len(row) else ""
+            pause = row[idx_pause].strip().upper() if idx_pause < len(row) else ""
+            voted = row[idx_voted].strip() if idx_voted < len(row) else ""
 
             parent_info = f"👤 {parent_name}"
             if username:
