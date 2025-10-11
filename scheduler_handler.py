@@ -4,6 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group
 from reminder_handler import schedule_report
+from utils import now_local,format_now
 import datetime
 from datetime import datetime
 import pytz
@@ -46,10 +47,10 @@ groups = [
     },
     {
         "name": "Младшей группы",
-        "days": ["Tuesday", "Thursday",],
+        "days": ["Tuesday", "Thursday", "Saturday",],
         "time": "17:30",
-        "thread_id": 2226,
-        # "thread_id": 362,
+        # "thread_id": 2226,
+        "thread_id": 362,
     },
 ]
 
@@ -247,13 +248,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
              # Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
             try:
-                tz = pytz.timezone("Asia/Ho_Chi_Minh")
-                now_local = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                
                 new_row = [[
                     poll_msg.poll.id,
-                    group["name"],  # можно заменить на group_value, если хочешь названия из таблицы
-                    "", "", now_local, "", ""  # пустые ячейки под user_id, username, время и ответ
+                    group["name"],
+                    "", "", format_now(), "", ""  # пустые ячейки под user_id, username, время и ответ
                 ]]
                 sheets_service.values().append(
                     spreadsheetId=SPREADSHEET_ID,
