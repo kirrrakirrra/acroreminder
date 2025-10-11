@@ -5,6 +5,8 @@ from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group
 from reminder_handler import schedule_report
 import datetime
+from datetime import datetime
+import pytz
 import asyncio
 import os
 import logging
@@ -245,10 +247,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
              # Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
             try:
+                tz = pytz.timezone("Asia/Ho_Chi_Minh")
+                now_local = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                
                 new_row = [[
                     poll_msg.poll.id,
                     group["name"],  # можно заменить на group_value, если хочешь названия из таблицы
-                    "", "", "", "", ""  # пустые ячейки под user_id, username, время и ответ
+                    "", "", now_local, "", ""  # пустые ячейки под user_id, username, время и ответ
                 ]]
                 sheets_service.values().append(
                     spreadsheetId=SPREADSHEET_ID,
