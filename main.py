@@ -1,10 +1,11 @@
 import asyncio
 import datetime
 import logging
-import pytz
 import nest_asyncio
+import pytz
 from datetime import datetime
 from aiohttp import web
+from utils import get_now_local
 from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
 from check_handler import check_subscriptions, expired_command
@@ -25,17 +26,14 @@ class VietnamFormatter(logging.Formatter):
 
     def formatTime(self, record, datefmt=None):
         dt = datetime.fromtimestamp(record.created, self.tz)
-        if datefmt:
-            return dt.strftime(datefmt)
-        else:
-            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
 
 formatter = VietnamFormatter("%(asctime)s - %(levelname)s - %(message)s")
 
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
-logging.root.handlers = [handler]
-logging.root.setLevel(logging.INFO)
+
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 async def error_handler(update, context):
     logging.error(f"❗ Ошибка: {context.error}")
@@ -105,5 +103,3 @@ if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
     asyncio.run(main())
-
-
