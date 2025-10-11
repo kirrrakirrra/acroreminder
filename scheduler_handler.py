@@ -45,10 +45,10 @@ groups = [
     },
     {
         "name": "Младшей группы",
-        "days": ["Tuesday", "Thursday", "Saturday",],
+        "days": ["Tuesday", "Thursday",],
         "time": "17:30",
-        # "thread_id": 2226,
-        "thread_id": 362,
+        "thread_id": 2226,
+        # "thread_id": 362,
     },
 ]
 
