@@ -6,7 +6,6 @@ from reminder_handler import poll_to_group
 from reminder_handler import schedule_report
 from utils import now_local,format_now
 import datetime
-from datetime import datetime
 import pytz
 import asyncio
 import os
