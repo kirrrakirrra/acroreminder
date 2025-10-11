@@ -126,7 +126,7 @@ async def send_admin_report(app, poll_id):
 
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=USERNAMES_SHEET + "!A2:N"
+            range=USERNAMES_SHEET + "!A1:N"
         ).execute()
         rows = resp.get("values", [])
 
