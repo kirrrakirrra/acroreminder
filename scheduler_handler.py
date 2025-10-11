@@ -5,8 +5,7 @@ from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group
 from reminder_handler import schedule_report
 from utils import now_local,format_now
-import datetime
-import pytz
+from datetime import datetime
 import asyncio
 import os
 import logging
@@ -160,8 +159,11 @@ async def check_expired_subscriptions(app, today_group_names):
                             expired_warning = ""
                             for fmt in ["%d.%m.%Y", "%d/%m/%y", "%d/%m/%Y", "%Y-%m-%d"]:
                                 try:
-                                    end_date = datetime.datetime.strptime(end, fmt)
-                                    if end_date.date() < datetime.datetime.now().date() and int(used) < 8:
+                                    # end_date = datetime.datetime.strptime(end, fmt)
+                                    # if end_date.date() < datetime.datetime.now().date() and int(used) < 8:
+                                    end_date = datetime.strptime(end, fmt)
+                                    if end_date.date() < now_local().date() and int(used) < 8:
+
                                         expired_warning = f"‼️ *Срок действия абонемента закончился {end}*"
                                     break
                                 except ValueError:
@@ -290,8 +292,9 @@ async def scheduler(app):
 
     while True:
         try:
-            now_utc = datetime.datetime.utcnow()
-            now = now_utc + datetime.timedelta(hours=7)
+            now = now_local()
+            # now_utc = datetime.datetime.utcnow()------------  проверить потом убрать
+            # now = now_utc + datetime.timedelta(hours=7)------------проверить потом убрать
             weekday = now.strftime("%A")
             current_time = now.strftime("%H:%M")
 
