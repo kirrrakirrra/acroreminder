@@ -5,7 +5,7 @@ import nest_asyncio
 import pytz
 from datetime import datetime
 from aiohttp import web
-from utils import get_now_local
+from utils import now_local, format_now
 from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
 from check_handler import check_subscriptions, expired_command
