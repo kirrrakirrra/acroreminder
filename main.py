@@ -1,7 +1,9 @@
 import asyncio
 import datetime
 import logging
+import pytz
 import nest_asyncio
+from datetime import datetime
 from aiohttp import web
 from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
@@ -18,13 +20,22 @@ from telegram.ext import (
     PollAnswerHandler
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler()  # только вывод в Render Logs
-    ]
-)
+class VietnamFormatter(logging.Formatter):
+    tz = pytz.timezone("Asia/Ho_Chi_Minh")
+
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, self.tz)
+        if datefmt:
+            return dt.strftime(datefmt)
+        else:
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+formatter = VietnamFormatter("%(asctime)s - %(levelname)s - %(message)s")
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logging.root.handlers = [handler]
+logging.root.setLevel(logging.INFO)
 
 async def error_handler(update, context):
     logging.error(f"❗ Ошибка: {context.error}")
