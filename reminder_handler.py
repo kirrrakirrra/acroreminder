@@ -2,11 +2,13 @@ import asyncio
 import logging
 import os
 import re
-from utils import format_now
+from utils import now_local, format_now
 from telegram.constants import ParseMode
 from datetime import datetime
 
 delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 5))
+report_hour = int(os.getenv("REPORT_HOUR", 15))
+report_minute = int(os.getenv("REPORT_MINUTE", 10))
 
 # Хранилище голосов в памяти (резервный вариант)
 poll_votes = {}
@@ -87,7 +89,20 @@ async def handle_poll_answer(update, context):
 # Планируем отправку отчета
 async def schedule_report(app, group, poll_id):
     poll_to_group[poll_id] = group
-    await asyncio.sleep(60 * delay_minutes)
+    # Время сейчас
+    now = now_local()
+    # Время следующего отчета
+    report_time = now.replace(hour=report_hour, minute=report_minute, second=0, microsecond=0)
+
+    # Если уже позже — сместим на завтра
+    if report_time <= now:
+        from datetime import timedelta
+        report_time += timedelta(days=1)
+
+    delay_seconds = (report_time - now).total_seconds()
+    logging.info(f"🕒 Ожидаем {int(delay_seconds)} секунд до отправки отчета в {report_time.strftime('%H:%M')}")
+
+    await asyncio.sleep(delay_seconds)
     await send_admin_report(app, poll_id)
 
 def escape_md(text):
