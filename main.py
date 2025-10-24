@@ -10,7 +10,7 @@ from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
 from check_handler import check_subscriptions, expired_command
 from info_handler import info_command, info_callback
-from reminder_handler import handle_poll_answer
+from reminder_handler import handle_poll_answer, restore_poll_to_group
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import (
@@ -75,6 +75,8 @@ async def main():
     # Инициализация приложения
     await app.initialize()
 
+    restore_poll_to_group()
+    
     # Хендлеры
     app.add_handler(get_start_handler())
     app.add_handler(CommandHandler("check", check_subscriptions))
