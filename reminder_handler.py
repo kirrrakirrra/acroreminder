@@ -86,6 +86,34 @@ async def handle_poll_answer(update, context):
     except Exception as e:
         logging.warning(f"❗ Не удалось записать голос в таблицу: {e}")
 
+# 🧠 Восстанавливаем poll_id → group_name при запуске
+def restore_poll_to_group():
+    """
+    При запуске — восстанавливает словарь poll_to_group из таблицы 'Опросы',
+    чтобы знать, какой опрос к какой группе относится (в случае перезапуска).
+    """
+    try:
+        resp = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range="Опросы!A2:G"  # A2 — пропустить заголовок, G — колонка "ответ"
+        ).execute()
+
+        rows = resp.get("values", [])
+        for row in rows:
+            if len(row) < 2:
+                continue  # Нужно минимум poll_id + group_name
+
+            poll_id = row[0].strip()
+            group_name = row[1].strip()
+
+            if poll_id and group_name:
+                poll_to_group[poll_id] = {"name": group_name}
+
+        logging.info(f"♻️ Восстановлено {len(poll_to_group)} записей poll_to_group")
+
+    except Exception as e:
+        logging.warning(f"❗ Ошибка при восстановлении poll_to_group: {e}")
+
 # Планируем отправку отчета
 async def schedule_report(app, group, poll_id):
     poll_to_group[poll_id] = group
@@ -129,13 +157,6 @@ async def send_admin_report(app, poll_id):
             range=USERNAMES_SHEET + "!A1:N"
         ).execute()
         rows = resp.get("values", [])
-
-        # idx_name = 1
-        # idx_username = 2
-        # idx_parent = 7
-        # idx_pause = 9
-        # idx_voted = 10
-        # idx_group = 11
         
         header = rows[0]
         try:
