@@ -249,10 +249,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
              # Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
             try:
+                options_text = "|".join([opt.text for opt in poll_msg.poll.options])
                 new_row = [[
                     poll_msg.poll.id,
                     group["name"],
-                    "", "", format_now(), "", ""  # пустые ячейки под user_id, username, время и ответ
+                    "", "", format_now(), "", options_text  # пустые ячейки под user_id, username, время и ответ
                 ]]
                 sheets_service.values().append(
                     spreadsheetId=SPREADSHEET_ID,
