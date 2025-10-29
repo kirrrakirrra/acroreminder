@@ -10,10 +10,8 @@ delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 5))
 report_hour = int(os.getenv("REPORT_HOUR", 15))
 report_minute = int(os.getenv("REPORT_MINUTE", 10))
 
-# Хранилище голосов в памяти (резервный вариант)
+# Хранилище голосов в памяти (резервный вариант) и poll_id → group
 poll_votes = {}
-
-# Храним связь poll_id → group
 poll_to_group = {}
 
 # Google Sheets
@@ -239,9 +237,18 @@ async def send_admin_report(app, poll_id):
         
         report = "\n\n".join(parts)
         logging.info(f"📤 Отправка отчета админу:\n{report}")
-        await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
+                # 1. Отправляем отчет и сохраняем message_id
+        report_msg = await app.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=report,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_report|{poll_id}")],
+                [InlineKeyboardButton("📣 Отправить родителям", callback_data=f"notify_parents|{poll_id}")]
+            ])
+        )
         
-        # Второе сообщение: пинг
+        # 2. Формируем упоминания
         mentions = []
         for row in rows:
             if len(row) < idx_group:
@@ -257,9 +264,33 @@ async def send_admin_report(app, poll_id):
             if not voted and pause != "TRUE" and pause != "РАЗОВО" and username:
                 mentions.append(f"@{username}")
         
+        # 3. Отправляем пинг, если есть кого упоминать
+        ping_msg = None
         if mentions:
             mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
-            await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
+            ping_msg = await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
+        
+        # 4. Записываем связку в таблицу "Репорты"
+        try:
+            new_row = [[
+                poll_id,
+                group_name_code,
+                str(report_msg.message_id),
+                str(ping_msg.message_id) if ping_msg else "",
+                "",  # group_chat_id — вставишь формулой
+                ""   # thread_id — вставишь формулой
+            ]]
+            sheets_service.values().append(
+                spreadsheetId=SPREADSHEET_ID,
+                range="Репорты!A1",
+                valueInputOption="USER_ENTERED",
+                insertDataOption="INSERT_ROWS",
+                body={"values": new_row}
+            ).execute()
+            logging.info(f"✅ Связка сообщений записана в Репорты")
+        except Exception as e:
+            logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
+
 
     except Exception as e:
         logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
