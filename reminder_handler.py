@@ -4,9 +4,9 @@ import os
 import re
 from utils import now_local, format_now
 from telegram.constants import ParseMode
-from datetime import datetime
+from datetime import datetime, timedelta
 
-delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 5))
+# delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 5))
 report_hour = int(os.getenv("REPORT_HOUR", 15))
 report_minute = int(os.getenv("REPORT_MINUTE", 10))
 
@@ -17,7 +17,6 @@ poll_to_group = {}
 # Google Sheets
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import os
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
@@ -112,24 +111,22 @@ def restore_poll_to_group():
     except Exception as e:
         logging.warning(f"❗ Ошибка при восстановлении poll_to_group: {e}")
 
-# Планируем отправку отчета
+# Планируем отправку отчета в заданное время (только сегодня)
 async def schedule_report(app, group, poll_id):
     poll_to_group[poll_id] = group
-    # Время сейчас
     now = now_local()
-    # Время следующего отчета
     report_time = now.replace(hour=report_hour, minute=report_minute, second=0, microsecond=0)
 
-    # Если уже позже — сместим на завтра
+    # ⛔ Если уже позже — НЕ ОТПРАВЛЯЕМ
     if report_time <= now:
-        from datetime import timedelta
-        report_time += timedelta(days=1)
+        logging.warning(f"⚠️ Время отправки отчета уже прошло ({report_time.strftime('%H:%M')}), отчёт не будет отправлен.")
+        return
 
     delay_seconds = (report_time - now).total_seconds()
-    logging.info(f"🕒 Ожидаем {int(delay_seconds)} секунд до отправки отчета в {report_time.strftime('%H:%M')}")
-
+    logging.info(f"🕒 Ожидаем {int(delay_seconds)} секунд до отчета в {report_time.strftime('%H:%M')}")
     await asyncio.sleep(delay_seconds)
     await send_admin_report(app, poll_id)
+
 
 def escape_md(text):
     """
