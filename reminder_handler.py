@@ -3,11 +3,12 @@ import logging
 import os
 import re
 from utils import now_local, format_now
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.constants import ParseMode
+from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
 
-delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 1))
+# delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 1))
 report_hour = int(os.getenv("REPORT_HOUR", 15))
 report_minute = int(os.getenv("REPORT_MINUTE", 10))
 
@@ -100,15 +101,11 @@ def restore_poll_to_group():
         for row in rows:
             if len(row) < 2:
                 continue  # Нужно минимум poll_id + group_name
-
             poll_id = row[0].strip()
             group_name = row[1].strip()
-
             if poll_id and group_name:
                 poll_to_group[poll_id] = {"name": group_name}
-
         logging.info(f"♻️ Восстановлено {len(poll_to_group)} записей poll_to_group")
-
     except Exception as e:
         logging.warning(f"❗ Ошибка при восстановлении poll_to_group: {e}")
 
@@ -145,7 +142,7 @@ def escape_md(text):
     return re.sub(r'([_*[\]()])', r'\\\1', text)
     
 # Отправка отчёта админу  
-async def send_admin_report(app, poll_id):
+async def send_admin_report(app, poll_id, report_message_id=None, ping_message_id=None):
     group = poll_to_group.get(poll_id)
     if not group:
         logging.warning(f"⚠️ Не найдена группа для poll_id={poll_id}")
@@ -245,16 +242,29 @@ async def send_admin_report(app, poll_id):
         report = "\n\n".join(parts)
         logging.info(f"📤 Отправка отчета админу:\n{report}")
         # await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
+
+        report_msg = None
+        ping_msg = None
                 # 1. Отправляем отчет и сохраняем message_id
-        report_msg = await app.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=report,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_report|{poll_id}")],
-                [InlineKeyboardButton("📣 Отправить родителям", callback_data=f"notify_parents|{poll_id}")]
-            ])
-        )
+        if report_message_id:
+            await app.bot.edit_message_text(
+                chat_id=ADMIN_ID,
+                message_id=report_message_id,
+                text=report,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_report|{poll_id}")]
+                ])
+            )
+        else:
+            report_msg = await app.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=report,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_report|{poll_id}")]
+                ])
+            )
         
         # 2. Формируем упоминания
         mentions = []
@@ -273,34 +283,86 @@ async def send_admin_report(app, poll_id):
                 mentions.append(f"@{username}")
         
         # 3. Отправляем пинг, если есть кого упоминать
-        ping_msg = None
         if mentions:
             mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
-            # await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
-            ping_msg = await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
-        
-        # 4. Записываем связку в таблицу "Репорты"
-        try:
-            new_row = [[
-                poll_id,
-                group_name_code,
-                str(report_msg.message_id),
-                str(ping_msg.message_id) if ping_msg else "",
-                "",  # group_chat_id — вставишь формулой
-                ""   # thread_id — вставишь формулой
-            ]]
-            sheets_service.values().append(
-                spreadsheetId=SPREADSHEET_ID,
-                range="Репорты!A1",
-                valueInputOption="USER_ENTERED",
-                insertDataOption="INSERT_ROWS",
-                body={"values": new_row}
-            ).execute()
-            logging.info(f"✅ Связка сообщений записана в Репорты")
-        except Exception as e:
-            logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
+            if ping_message_id:
+                await app.bot.edit_message_text(
+                    chat_id=ADMIN_ID,
+                    message_id=ping_message_id,
+                    text=mention_text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📣 Отправить в группу", callback_data=f"notify_parents|{poll_id}")]
+                    ])
+                )
+            else:
+                ping_msg = await app.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=mention_text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📣 Отправить в группу", callback_data=f"notify_parents|{poll_id}")]
+                    ])
+                )
+        # Только если сообщение создаётся заново
+        report_msg_id = report_msg.message_id if not report_message_id else report_message_id
+        ping_msg_id = ping_msg.message_id if not ping_message_id else ping_message_id
 
+        # 4. Записываем связку в таблицу "Репорты"
+        if not report_message_id and report_msg:
+            try:
+                new_row = [[
+                    poll_id.strip(),
+                    group_name_code,
+                    str(report_msg.message_id),
+                    str(ping_msg.message_id) if ping_msg else "",
+                    "",  # group_chat_id
+                    "",  # thread_id
+                ]]
+                sheets_service.values().append(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range="Репорты!A1",
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": new_row}
+                ).execute()
+                logging.info(f"✅ Связка сообщений записана в Репорты")
+            except Exception as e:
+                logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
 
     except Exception as e:
         logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
         
+async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    _, poll_id = query.data.split("|")
+
+    # Получаем связку из таблицы Репорты
+    try:
+        resp = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range="Репорты!A2:G"  # заголовки: poll_id, group_name, report_msg_id, ping_msg_id, group_id, thread_id, date
+        ).execute()
+        rows = resp.get("values", [])
+
+        row = next((r for r in rows if r[0] == poll_id), None)
+        if not row:
+            await query.edit_message_text("❌ Не найдена связка в таблице Репорты.")
+            return
+
+        group_name = row[1]
+        report_msg_id = int(row[2]) if row[2] else None
+        ping_msg_id = int(row[3]) if row[3] else None
+
+        # Добавляем минимум необходимый в словарь, если нужно
+        poll_to_group[poll_id] = {"name": group_name}
+
+        # Обновляем отчёт и пинг
+        await send_admin_report(
+            app=context.application,
+            poll_id=poll_id,
+            report_message_id=report_msg_id,
+            ping_message_id=ping_msg_id
+        )
+
+    except Exception as e:
+        logging.warning(f"❗ Ошибка в refresh_report_callback: {e}")
