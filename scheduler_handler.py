@@ -277,8 +277,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     group["name"],
                     "",  # report_message_id — появится после отправки
                     "",  # ping_message_id — появится после отправки
-                    group["chat_id"],     # вставим сразу
-                    group["thread_id"],   # вставим сразу
+                    "",  #group["chat_id"],     # вставим сразу
+                    "",  #group["thread_id"],   # вставим сразу
                     now_local().strftime("%Y-%m-%d")  # дата — удобно для /report
                 ]]
                 sheets_service.values().append(
