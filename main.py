@@ -84,8 +84,8 @@ async def main():
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|skip)\|"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
+    app.add_handler(CallbackQueryHandler(refresh_report_callback, pattern="^refresh_report\|"))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
-    application.add_handler(CallbackQueryHandler(refresh_report_callback, pattern="^refresh_report\|"))
     app.add_error_handler(error_handler)
 
     # Планировщик и сервер
