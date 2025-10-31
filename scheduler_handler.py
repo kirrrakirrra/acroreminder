@@ -31,24 +31,24 @@ min_end = int(os.getenv("CHECK_MIN_END", 3))
 groups = [
     {
         "name": "Старшей начинающей группы",
-        "days": ["Monday", "Wednesday", "Friday",],
+        "days": ["Monday", "Wednesday", "Friday", "Saturday",],
         "time": "17:15",
-        "thread_id": 2225,
-        # "thread_id": 105,
+        # "thread_id": 2225,
+        "thread_id": 105,
     },
     {
         "name": "Старшей продолжающей группы",
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "18:30",
-        "thread_id": 7,
-        # "thread_id": 362,
+        # "thread_id": 7,
+        "thread_id": 362,
     },
     {
         "name": "Младшей группы",
-        "days": ["Tuesday", "Thursday",],
+        "days": ["Tuesday", "Thursday", "Saturday",],
         "time": "17:30",
-        "thread_id": 2226,
-        # "thread_id": 362,
+        # "thread_id": 2226,
+        "thread_id": 362,
     },
 ]
 
@@ -265,9 +265,33 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.warning(f"❗ Не удалось записать poll_id: {e}")
 
-            context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  # 👈 вот это добавь
-            poll_to_group[poll_msg.poll.id] = group             # ⬅️ сохраняем группу
+            context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  
             
+            # 1. Отправили опрос → запланировать отчет
+            poll_to_group[poll_msg.poll.id] = group
+            
+            # 2. Записать запланированный отчёт в таблицу "Репорты"
+            try:
+                new_row = [[
+                    poll_msg.poll.id,
+                    group["name"],
+                    "",  # report_message_id — появится после отправки
+                    "",  # ping_message_id — появится после отправки
+                    group["chat_id"],     # вставим сразу
+                    group["thread_id"],   # вставим сразу
+                    now_local().strftime("%Y-%m-%d")  # дата — удобно для /report
+                ]]
+                sheets_service.values().append(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range="Репорты!A1",
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": new_row}
+                ).execute()
+                logging.info("✅ Запланированный отчет записан в таблицу Репорты")
+            except Exception as e:
+                logging.warning(f"❗ Не удалось записать запланированный отчет: {e}")
+
             context.application.create_task(schedule_report(context.application, group, poll_msg.poll.id))
         
         except Exception as e:
