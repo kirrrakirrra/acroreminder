@@ -3,10 +3,11 @@ import logging
 import os
 import re
 from utils import now_local, format_now
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from datetime import datetime, timedelta
 
-# delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 5))
+delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 1))
 report_hour = int(os.getenv("REPORT_HOUR", 15))
 report_minute = int(os.getenv("REPORT_MINUTE", 10))
 
@@ -115,6 +116,15 @@ def restore_poll_to_group():
 async def schedule_report(app, group, poll_id):
     poll_to_group[poll_id] = group
     now = now_local()
+    
+    TEST_DELAY_MINUTES = 1
+    if TEST_DELAY_MINUTES:
+        delay_seconds = TEST_DELAY_MINUTES * 60
+        logging.info(f"🧪 Тест: ждем {TEST_DELAY_MINUTES} минут до отправки отчета")
+        await asyncio.sleep(delay_seconds)
+        await send_admin_report(app, poll_id)
+        return
+        
     report_time = now.replace(hour=report_hour, minute=report_minute, second=0, microsecond=0)
 
     # ⛔ Если уже позже — НЕ ОТПРАВЛЯЕМ
