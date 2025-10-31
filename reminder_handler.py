@@ -234,17 +234,17 @@ async def send_admin_report(app, poll_id):
         
         report = "\n\n".join(parts)
         logging.info(f"📤 Отправка отчета админу:\n{report}")
-        await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
-                # 1. Отправляем отчет и сохраняем message_id
-        # report_msg = await app.bot.send_message(
-        #     chat_id=ADMIN_ID,
-        #     text=report,
-        #     parse_mode=ParseMode.MARKDOWN,
-        #     reply_markup=InlineKeyboardMarkup([
-        #         [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_report|{poll_id}")],
-        #         [InlineKeyboardButton("📣 Отправить родителям", callback_data=f"notify_parents|{poll_id}")]
-        #     ])
-        # )
+        # await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
+                1. Отправляем отчет и сохраняем message_id
+        report_msg = await app.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=report,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Обновить", callback_data=f"refresh_report|{poll_id}")],
+                [InlineKeyboardButton("📣 Отправить родителям", callback_data=f"notify_parents|{poll_id}")]
+            ])
+        )
         
         # 2. Формируем упоминания
         mentions = []
@@ -263,11 +263,11 @@ async def send_admin_report(app, poll_id):
                 mentions.append(f"@{username}")
         
         # 3. Отправляем пинг, если есть кого упоминать
-        # ping_msg = None
+        ping_msg = None
         if mentions:
             mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
-            await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
-            # ping_msg = await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
+            # await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
+            ping_msg = await app.bot.send_message(chat_id=ADMIN_ID, text=mention_text)
         
         # 4. Записываем связку в таблицу "Репорты"
         try:
