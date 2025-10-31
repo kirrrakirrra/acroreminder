@@ -235,7 +235,7 @@ async def send_admin_report(app, poll_id):
         report = "\n\n".join(parts)
         logging.info(f"📤 Отправка отчета админу:\n{report}")
         # await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
-                1. Отправляем отчет и сохраняем message_id
+                # 1. Отправляем отчет и сохраняем message_id
         report_msg = await app.bot.send_message(
             chat_id=ADMIN_ID,
             text=report,
