@@ -303,8 +303,8 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                     ])
                 )
         # Только если сообщение создаётся заново
-        report_msg_id = report_msg.message_id if not report_message_id else report_message_id
-        ping_msg_id = ping_msg.message_id if not ping_message_id else ping_message_id
+        report_msg_id = report_message_id or (report_msg.message_id if 'report_msg' in locals() else None)
+        ping_msg_id = ping_message_id or (ping_msg.message_id if 'ping_msg' in locals() else None)
 
         # 4. Записываем связку в таблицу "Репорты"
         if not report_message_id and report_msg:
