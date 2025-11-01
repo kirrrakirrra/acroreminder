@@ -313,15 +313,36 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         ping_msg_id = ping_msg.message_id if ping_msg else ping_message_id
 
         # 4. Записываем связку в таблицу "Репорты"
-        if not report_message_id and report_msg:
-            try:
+        try:
+            found = False
+            resp = sheets_service.values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range="Репорты!A2:G"
+            ).execute()
+            rows = resp.get("values", [])
+        
+            for i, row in enumerate(rows, start=2):  # строки начинаются с A2
+                if row[0] == poll_id:
+                    found = True
+                    sheets_service.values().update(
+                        spreadsheetId=SPREADSHEET_ID,
+                        range=f"Репорты!C{i}:D{i}",
+                        valueInputOption="USER_ENTERED",
+                        body={"values": [[
+                            str(report_msg_id),
+                            str(ping_msg_id)
+                        ]]}
+                    ).execute()
+                    logging.info(f"✏️ Обновлены message_id в строке {i}")
+                    break
+        
+            if not found and report_msg:
                 new_row = [[
                     poll_id.strip(),
                     group_name_code,
-                    str(report_msg.message_id),
-                    str(ping_msg.message_id) if ping_msg else "",
-                    "",  # group_chat_id
-                    "",  # thread_id
+                    str(report_msg_id),
+                    str(ping_msg_id) if ping_msg else "",
+                    "", "", ""
                 ]]
                 sheets_service.values().append(
                     spreadsheetId=SPREADSHEET_ID,
@@ -330,9 +351,9 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                     insertDataOption="INSERT_ROWS",
                     body={"values": new_row}
                 ).execute()
-                logging.info(f"✅ Связка сообщений записана в Репорты")
-            except Exception as e:
-                logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
+                logging.info(f"✅ Связка сообщений записана в Репорты (новая строка)")
+        except Exception as e:
+            logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
     
         return report_msg_id, ping_msg_id
 
@@ -346,13 +367,14 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
     logging.info(f"🔄 Нажата кнопка обновления для poll_id={poll_id}")
 
     try:
+        # 1️⃣ Берём строку с нужным poll_id из таблицы "Репорты"
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
             range="Репорты!A2:G"
         ).execute()
         rows = resp.get("values", [])
-
         row = next((r for r in rows if r[0] == poll_id), None)
+
         if not row:
             await query.edit_message_text("❌ Не найдена связка в таблице Репорты.")
             return
@@ -363,8 +385,7 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
 
         poll_to_group[poll_id] = {"name": group_name}
 
-        # 🛠 Получаем актуальные ID после обновления
-        # ⬇️ Получаем новые message_id после обновления
+        # 2️⃣ Обновляем отчёт и получаем актуальные ID
         new_report_id, new_ping_id = await send_admin_report(
             app=context.application,
             poll_id=poll_id,
@@ -372,24 +393,23 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
             ping_message_id=ping_message_id
         )
 
-        # ⬇️ Обновляем строку, если сообщения были изменены
+        # 3️⃣ Если message_id изменились — обновляем строку в таблице
         try:
-            if new_report_id and new_ping_id:
-                for i, r in enumerate(rows, start=2):  # начинаем с A2
-                    if r[0] == poll_id:
-                        update_range = f"Репорты!C{i}:D{i}"
-                        sheets_service.values().update(
-                            spreadsheetId=SPREADSHEET_ID,
-                            range=update_range,
-                            valueInputOption="RAW",
-                            body={"values": [[str(new_report_id), str(new_ping_id)]]}
-                        ).execute()
-                        logging.info(f"✏️ Обновлены message_id в строке {i} для poll_id={poll_id}")
-                        break
+            for i, r in enumerate(rows, start=2):  # начинаем с A2
+                if r[0] == poll_id:
+                    update_range = f"Репорты!C{i}:D{i}"
+                    sheets_service.values().update(
+                        spreadsheetId=SPREADSHEET_ID,
+                        range=update_range,
+                        valueInputOption="RAW",
+                        body={"values": [[str(new_report_id), str(new_ping_id)]]}
+                    ).execute()
+                    logging.info(f"✏️ Обновлены message_id в строке {i} для poll_id={poll_id}")
+                    break
         except Exception as e:
             logging.warning(f"❗ Ошибка при обновлении связки в Репорты: {e}")
 
-        logging.info(f"✅ Обновление отчёта завершено: report_msg_id={report_msg_id}, ping_msg_id={ping_msg_id}")
+        logging.info(f"✅ Обновление отчёта завершено: new_report_id={new_report_id}, new_ping_id={new_ping_id}")
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в refresh_report_callback: {e}")
