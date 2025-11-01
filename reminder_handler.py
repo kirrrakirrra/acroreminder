@@ -245,32 +245,9 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
 
         report_msg = None
         ping_msg = None
-        should_send_new_report = False
-        should_send_new_ping = False
-
-        # Удаляем старые сообщения, если указаны
-        if report_message_id:
-            try:
-                await app.bot.delete_message(chat_id=ADMIN_ID, message_id=report_message_id)
-                logging.info(f"🗑 Удалено старое сообщение отчёта {report_message_id}")
-                should_send_new_report = True
-            except Exception as e:
-                logging.warning(f"❗ Не удалось удалить старое сообщение отчёта: {e}")
-        else:
-            should_send_new_report = True
-        
-        if ping_message_id:
-            try:
-                await app.bot.delete_message(chat_id=ADMIN_ID, message_id=ping_message_id)
-                logging.info(f"🗑 Удалено старое сообщение пинга {ping_message_id}")
-                should_send_new_ping = True
-            except Exception as e:
-                logging.warning(f"❗ Не удалось удалить старое сообщение пинга: {e}")
-        else:
-            should_send_new_ping = True
 
         # Отправляем или обновляем отчёт
-        if not should_send_new_report and report_message_id:
+        if report_message_id:
             await app.bot.edit_message_text(
                 chat_id=ADMIN_ID,
                 message_id=report_message_id,
@@ -311,7 +288,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         # Отправляем или обновляем пинг
         if mentions:
             mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
-            if not should_send_new_ping and ping_message_id:
+            if ping_message_id:
                 await app.bot.edit_message_text(
                     chat_id=ADMIN_ID,
                     message_id=ping_message_id,
@@ -330,7 +307,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                     ])
                 )
                 logging.info(f"📨 Отправлен новый пинг (msg_id={ping_msg.message_id})")
-        
+
         # Сохраняем ID сообщений, если они новые
         report_msg_id = report_msg.message_id if report_msg else report_message_id
         ping_msg_id = ping_msg.message_id if ping_msg else ping_message_id
@@ -381,8 +358,8 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
             return
 
         group_name = row[1]
-        report_msg_id = int(row[2]) if row[2] else None
-        ping_msg_id = int(row[3]) if row[3] else None
+        report_msg_id = int(row[2]) if len(row) > 2 and row[2] else None
+        ping_msg_id = int(row[3]) if len(row) > 3 and row[3] else None
 
         # Добавляем минимум необходимый в словарь, если нужно
         poll_to_group[poll_id] = {"name": group_name}
