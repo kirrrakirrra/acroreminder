@@ -364,12 +364,30 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
         poll_to_group[poll_id] = {"name": group_name}
 
         # 🛠 Получаем актуальные ID после обновления
-        report_msg_id, ping_msg_id = await send_admin_report(
+        # ⬇️ Получаем новые message_id после обновления
+        new_report_id, new_ping_id = await send_admin_report(
             app=context.application,
             poll_id=poll_id,
             report_message_id=report_message_id,
             ping_message_id=ping_message_id
         )
+
+        # ⬇️ Обновляем строку, если сообщения были изменены
+        try:
+            if new_report_id and new_ping_id:
+                for i, r in enumerate(rows, start=2):  # начинаем с A2
+                    if r[0] == poll_id:
+                        update_range = f"Репорты!C{i}:D{i}"
+                        sheets_service.values().update(
+                            spreadsheetId=SPREADSHEET_ID,
+                            range=update_range,
+                            valueInputOption="RAW",
+                            body={"values": [[str(new_report_id), str(new_ping_id)]]}
+                        ).execute()
+                        logging.info(f"✏️ Обновлены message_id в строке {i} для poll_id={poll_id}")
+                        break
+        except Exception as e:
+            logging.warning(f"❗ Ошибка при обновлении связки в Репорты: {e}")
 
         logging.info(f"✅ Обновление отчёта завершено: report_msg_id={report_msg_id}, ping_msg_id={ping_msg_id}")
 
