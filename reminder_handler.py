@@ -358,8 +358,8 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
             return
 
         group_name = row[1]
-        report_msg_id = int(row[2]) if len(row) > 2 and row[2] else None
-        ping_msg_id = int(row[3]) if len(row) > 3 and row[3] else None
+        report_message_id = int(row[2]) if len(row) > 2 and row[2] else None
+        ping_message_id = int(row[3]) if len(row) > 3 and row[3] else None
 
         # Добавляем минимум необходимый в словарь, если нужно
         poll_to_group[poll_id] = {"name": group_name}
