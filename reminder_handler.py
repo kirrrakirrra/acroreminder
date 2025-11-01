@@ -333,6 +333,8 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                 logging.info(f"✅ Связка сообщений записана в Репорты")
             except Exception as e:
                 logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
+    
+        return report_msg_id, ping_msg_id
 
     except Exception as e:
         logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
@@ -343,12 +345,10 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
     _, poll_id = query.data.split("|")
     logging.info(f"🔄 Нажата кнопка обновления для poll_id={poll_id}")
 
-
-    # Получаем связку из таблицы Репорты
     try:
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range="Репорты!A2:G"  # заголовки: poll_id, group_name, report_msg_id, ping_msg_id, group_id, thread_id, date
+            range="Репорты!A2:G"
         ).execute()
         rows = resp.get("values", [])
 
@@ -361,16 +361,17 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
         report_message_id = int(row[2]) if len(row) > 2 and row[2] else None
         ping_message_id = int(row[3]) if len(row) > 3 and row[3] else None
 
-        # Добавляем минимум необходимый в словарь, если нужно
         poll_to_group[poll_id] = {"name": group_name}
 
-        # Обновляем отчёт и пинг
-        await send_admin_report(
+        # 🛠 Получаем актуальные ID после обновления
+        report_msg_id, ping_msg_id = await send_admin_report(
             app=context.application,
             poll_id=poll_id,
-            report_message_id=report_msg_id,
-            ping_message_id=ping_msg_id
+            report_message_id=report_message_id,
+            ping_message_id=ping_message_id
         )
+
+        logging.info(f"✅ Обновление отчёта завершено: report_msg_id={report_msg_id}, ping_msg_id={ping_msg_id}")
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в refresh_report_callback: {e}")
