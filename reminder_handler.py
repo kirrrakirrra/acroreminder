@@ -245,6 +245,24 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
 
         report_msg = None
         ping_msg = None
+
+        # Удаляем старые сообщения, если указаны
+        if report_message_id:
+            try:
+                await app.bot.delete_message(chat_id=ADMIN_ID, message_id=report_message_id)
+                logging.info(f"🗑 Удалено старое сообщение отчёта {report_message_id}")
+                report_message_id = None  # чтобы дальше отправился новый
+            except Exception as e:
+                logging.warning(f"❗ Не удалось удалить старое сообщение отчёта: {e}")
+        
+        if ping_message_id:
+            try:
+                await app.bot.delete_message(chat_id=ADMIN_ID, message_id=ping_message_id)
+                logging.info(f"🗑 Удалено старое сообщение пинга {ping_message_id}")
+                ping_message_id = None  # чтобы дальше отправился новый
+            except Exception as e:
+                logging.warning(f"❗ Не удалось удалить старое сообщение пинга: {e}")
+
                 # 1. Отправляем отчет и сохраняем message_id
         if report_message_id:
             await app.bot.edit_message_text(
