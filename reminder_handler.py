@@ -257,7 +257,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             except Exception as e:
                 logging.warning(f"❗ Не удалось удалить старое сообщение отчёта: {e}")
         else:
-        should_send_new_report = True
+            should_send_new_report = True
         
         if ping_message_id:
             try:
@@ -267,7 +267,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             except Exception as e:
                 logging.warning(f"❗ Не удалось удалить старое сообщение пинга: {e}")
         else:
-        should_send_new_ping = True
+            should_send_new_ping = True
 
         # Отправляем или обновляем отчёт
         if not should_send_new_report and report_message_id:
