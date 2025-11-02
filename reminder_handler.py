@@ -50,7 +50,6 @@ async def handle_poll_answer(update, context):
     if not selected_options:
         return
 
-    # Получаем текст ответа из poll.message.options (если доступно)
         # Получаем текст ответа по индексу из фиксированных опций
     try:
         option_text = DEFAULT_OPTIONS[selected_options[0]]
@@ -111,16 +110,10 @@ def restore_poll_to_group():
                 continue  # Нужно минимум poll_id + group_name
             poll_id = row[0].strip()
             group_name = row[1].strip()
-            # Варианты из G, если есть
-            options_text = row[6] if len(row) > 6 else ""
-            options_list = options_text.split("|") if options_text else []
             
             if poll_id and group_name:
                 poll_to_group[poll_id] = {"name": group_name}
 
-                if len(row) >= 7 and row[6].strip():  # G колонка — опции
-                    raw_options = row[6].strip().split("|")
-                    poll_to_group[poll_id]["options"] = raw_options
         logging.info(f"♻️ Восстановлено {len(poll_to_group)} записей poll_to_group")
     except Exception as e:
         logging.warning(f"❗ Ошибка при восстановлении poll_to_group: {e}")
@@ -257,7 +250,6 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         
         report = "\n\n".join(parts)
         logging.info(f"📤 Отправка отчета админу:\n{report}")
-        # await app.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode=ParseMode.MARKDOWN)
 
         report_msg = None
         ping_msg = None
