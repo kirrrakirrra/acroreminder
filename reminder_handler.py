@@ -47,9 +47,15 @@ async def handle_poll_answer(update, context):
     # Получаем текст ответа из poll.message.options (если доступно)
     option_text = ""
     try:
+        # 1️⃣ Сначала пробуем из context.bot_data (активные опросы)
         options = context.bot_data.get(poll_id)
         if options and len(selected_options) > 0:
             option_text = options[selected_options[0]].text
+        else:
+            # 2️⃣ Если бот перезапускался — берём из poll_to_group["options"]
+            restored_options = poll_to_group.get(poll_id, {}).get("options", [])
+            if restored_options and len(selected_options) > 0:
+                option_text = restored_options[selected_options[0]]
     except Exception as e:
         logging.warning(f"❗ Ошибка при получении текста опции: {e}")
         option_text = "(нет текста)"
@@ -103,8 +109,12 @@ def restore_poll_to_group():
                 continue  # Нужно минимум poll_id + group_name
             poll_id = row[0].strip()
             group_name = row[1].strip()
+            # Варианты из G, если есть
+            options_text = row[6] if len(row) > 6 else ""
+            options_list = options_text.split("|") if options_text else []
+            
             if poll_id and group_name:
-                poll_to_group[poll_id] = {"name": group_name}
+                poll_to_group[poll_id] = {"name": group_name, "options": options_list}
         logging.info(f"♻️ Восстановлено {len(poll_to_group)} записей poll_to_group")
     except Exception as e:
         logging.warning(f"❗ Ошибка при восстановлении poll_to_group: {e}")
