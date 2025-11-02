@@ -16,6 +16,12 @@ report_minute = int(os.getenv("REPORT_MINUTE", 10))
 poll_votes = {}
 poll_to_group = {}
 
+DEFAULT_OPTIONS = [
+    "✅ Будем по абонементу",
+    "💵 Будем разово",
+    "❌ Пропускаем"
+]
+
 # Google Sheets
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -45,22 +51,16 @@ async def handle_poll_answer(update, context):
         return
 
     # Получаем текст ответа из poll.message.options (если доступно)
-    option_text = ""
+        # Получаем текст ответа по индексу из фиксированных опций
     try:
-        # 1️⃣ Сначала пробуем из context.bot_data (активные опросы)
-        options = context.bot_data.get(poll_id)
-        if options and len(selected_options) > 0 and selected_options[0] < len(options):
-            option_text = options[selected_options[0]].text
-        else:
-            # 2️⃣ Если бот перезапускался — берём из poll_to_group["options"]
-            restored_options = poll_to_group.get(poll_id, {}).get("options", [])
-            if len(selected_options) > 0 and selected_options[0] < len(restored_options):
-                option_text = restored_options[selected_options[0]]
-            else:
-                option_text = "(неизвестная опция)"
+        option_text = DEFAULT_OPTIONS[selected_options[0]]
+    except IndexError:
+        option_text = "(неизвестный ответ)"
+        logging.warning(f"❗ Неизвестный индекс опции: {selected_options[0]}")
+
     except Exception as e:
         logging.warning(f"❗ Ошибка при получении текста опции: {e}")
-        option_text = "(нет текста)"
+        option_text = "(ошибка опции)"
        
     # Получаем название группы из poll_to_group
     group_name = poll_to_group.get(poll_id, {}).get("name", "?")
@@ -116,10 +116,11 @@ def restore_poll_to_group():
             options_list = options_text.split("|") if options_text else []
             
             if poll_id and group_name:
-                restored = {"name": group_name}
-                if len(row) >= 7:  # 7-я колонка — опции
-                    restored["options"] = row[6].split("|")
-                poll_to_group[poll_id] = restored
+                poll_to_group[poll_id] = {"name": group_name}
+
+                if len(row) >= 7 and row[6].strip():  # G колонка — опции
+                    raw_options = row[6].strip().split("|")
+                    poll_to_group[poll_id]["options"] = raw_options
         logging.info(f"♻️ Восстановлено {len(poll_to_group)} записей poll_to_group")
     except Exception as e:
         logging.warning(f"❗ Ошибка при восстановлении poll_to_group: {e}")
