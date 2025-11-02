@@ -31,7 +31,7 @@ min_end = int(os.getenv("CHECK_MIN_END", 3))
 groups = [
     {
         "name": "Старшей начинающей группы",
-        "days": ["Monday", "Wednesday", "Friday", "Saturday",],
+        "days": ["Monday", "Wednesday", "Friday",],
         "time": "17:15",
         # "thread_id": 2225,
         "thread_id": 105,
@@ -45,7 +45,7 @@ groups = [
     },
     {
         "name": "Младшей группы",
-        "days": ["Tuesday", "Thursday", "Saturday",],
+        "days": ["Tuesday", "Thursday", "Sunday",],
         "time": "17:30",
         # "thread_id": 2226,
         "thread_id": 362,
