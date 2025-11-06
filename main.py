@@ -82,6 +82,7 @@ async def main():
     app.add_handler(CommandHandler("check", check_subscriptions))
     app.add_handler(CommandHandler("expired", expired_command))
     app.add_handler(CommandHandler("info", info_command))
+    app.add_handler(CommandHandler("report", report_command))
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|skip)\|"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
     app.add_handler(CallbackQueryHandler(refresh_report_callback, pattern="^refresh_report\|"))
