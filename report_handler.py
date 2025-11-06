@@ -1,26 +1,26 @@
 import os
 import logging
-from datetime import datetime
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
+from telegram.ext import ContextTypes
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from utils import format_now  # ⬅️ у тебя уже есть локализованное время
+from reminder_handler import send_admin_report, poll_to_group
 
 # Получаем переменные из окружения
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 KARINA_ID = int(os.getenv("KARINA_ID"))
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 
+# Google Sheets
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
-
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
 )
 sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
 
-from reminder_handler import send_admin_report, poll_to_group
-
+# Авторизация
 def is_authorized(user_id: int) -> bool:
     return user_id in (ADMIN_ID, KARINA_ID)
 
@@ -32,7 +32,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = format_now().split(" ")[0]  # формат: "2025-11-06"
 
         # Получаем строки из таблицы "Репорты"
         resp = sheets_service.values().get(
@@ -69,7 +69,3 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.warning(f"❗ Ошибка в report_command: {e}")
         await update.message.reply_text("❌ Ошибка при выполнении команды /report")
-
-# Функция для регистрации команды
-def register_report_handler(application):
-    application.add_handler(CommandHandler("report", report_command))
