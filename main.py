@@ -10,6 +10,7 @@ from scheduler_handler import scheduler, handle_callback
 from start_handler import get_start_handler
 from check_handler import check_subscriptions, expired_command
 from info_handler import info_command, info_callback
+from report_handler import report_command
 from reminder_handler import handle_poll_answer, restore_poll_to_group, refresh_report_callback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
