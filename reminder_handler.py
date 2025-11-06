@@ -123,13 +123,13 @@ async def schedule_report(app, group, poll_id):
     poll_to_group[poll_id] = group
     now = now_local()
     
-    TEST_DELAY_MINUTES = 1
-    if TEST_DELAY_MINUTES:
-        delay_seconds = TEST_DELAY_MINUTES * 60
-        logging.info(f"🧪 Тест: ждем {TEST_DELAY_MINUTES} минут до отправки отчета")
-        await asyncio.sleep(delay_seconds)
-        await send_admin_report(app, poll_id)
-        return
+    # TEST_DELAY_MINUTES = 1
+    # if TEST_DELAY_MINUTES:
+    #     delay_seconds = TEST_DELAY_MINUTES * 60
+    #     logging.info(f"🧪 Тест: ждем {TEST_DELAY_MINUTES} минут до отправки отчета")
+    #     await asyncio.sleep(delay_seconds)
+    #     await send_admin_report(app, poll_id)
+    #     return
         
     report_time = now.replace(hour=report_hour, minute=report_minute, second=0, microsecond=0)
 
