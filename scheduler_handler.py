@@ -41,7 +41,7 @@ groups = [
         "days": ["Monday", "Wednesday", "Friday",],
         "time": "18:30",
         "thread_id": 7,
-        "thread_id": 362,
+        # "thread_id": 362,
     },
     {
         "name": "Младшей группы",
