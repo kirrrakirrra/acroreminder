@@ -100,7 +100,10 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # 3. Если всё ещё пусто — сообщение
     if not user_rows:
-        return await update.message.reply_text("У вас нет активных абонементов, или ваш username не добавлен, пожалуйста, обратитесь к администратору.")
+        return await update.message.reply_text(
+            "У вас нет активных абонементов, или ваш username не добавлен, пожалуйста, обратитесь к администратору."\n"
+            "ℹ️ Чтобы узнать информацию о расписании, ценах и правилах — воспользуйтесь командой /info."
+        )
 
     # Формируем сообщение
     messages = []
