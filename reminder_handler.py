@@ -290,7 +290,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             voted = safe_get(row, idx_voted)
             username = safe_get(row, idx_username)
         
-            if not voted and pause != "TRUE" and pause != "РАЗОВО" and username:
+            if not voted and pause != "TRUE" and username:
                 mentions.append(f"@{username}")
         
         # Отправляем или обновляем пинг
@@ -370,7 +370,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         
 async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer(cache_time=1)
     _, poll_id = query.data.split("|")
     logging.info(f"🔄 Нажата кнопка обновления для poll_id={poll_id}")
 
