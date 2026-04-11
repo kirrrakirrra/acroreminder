@@ -18,7 +18,7 @@ SUBSCRIPTION_SHEETS = [
     "Взрослая группа",
 ]
 
-DATA_RANGE = "A2:AG32"  # 2 строка = заголовки, 3-32 = данные
+DATA_RANGE = "A2:AH32"  # 2 строка = заголовки, 3-32 = данные
 
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
