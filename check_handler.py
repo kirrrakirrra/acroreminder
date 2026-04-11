@@ -1,175 +1,212 @@
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
 from telegram import Update
 from telegram.ext import ContextTypes
 import os
 import logging
 import datetime
+
 from scheduler_handler import check_expired_subscriptions, groups
-
-# ——————————————————————————————————————————————
-# Настройка доступа к Google Sheets
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-SERVICE_ACCOUNT_FILE = 'service_account.json'
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # берём из окружения
-SHEET_RANGE = 'Абонементы!B1:V'
-
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
+from subscription_tools import (
+    load_all_subscriptions,
+    find_user_subscriptions,
+    format_usage,
+    is_finished,
 )
-sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
-# ——————————————————————————————————————————————
+
+# -----------------------------
+# Вспомогательные функции
+# -----------------------------
+
+def has_7_days_warning(subscription: dict) -> bool:
+    value = str(subscription.get("warning_7", "")).strip().lower()
+    return value == "warning_7"
+
+
+def build_visit_dates_text(subscription: dict) -> str:
+    """
+    Для лимитных абонементов:
+    показываем ровно столько строк, сколько лимит.
+    Для безлимита:
+    показываем только реально использованные даты.
+    """
+    visit_dates = subscription.get("visit_dates", [])
+    subscription_type = subscription.get("subscription_type")
+    limit_value = subscription.get("limit", 0)
+
+    # Безлимит — только реальные даты
+    if subscription_type == "unlimited":
+        if not visit_dates:
+            return "—"
+        return "\n".join(
+            [f"{i}. {date}" for i, date in enumerate(visit_dates, start=1)]
+        )
+
+    # Лимитные абонементы — ровно limit строк
+    try:
+        limit_value = int(limit_value)
+    except Exception:
+        limit_value = 0
+
+    if limit_value <= 0:
+        if not visit_dates:
+            return "—"
+        return "\n".join(
+            [f"{i}. {date}" for i, date in enumerate(visit_dates, start=1)]
+        )
+
+    lines = []
+    for i in range(1, limit_value + 1):
+        value = visit_dates[i - 1] if i - 1 < len(visit_dates) else "—"
+        lines.append(f"{i}. {value}")
+
+    return "\n".join(lines)
+
+
+def get_limited_subscription_warning(subscription: dict) -> str:
+    """
+    Для лимитных абонементов:
+    если в колонке Difference что-то есть, показываем предупреждение.
+    """
+    if subscription.get("subscription_type") == "unlimited":
+        return ""
+
+    difference_value = str(subscription.get("difference", "")).strip()
+    if not difference_value:
+        return ""
+
+    unused = subscription.get("unused", 0)
+    wo_left = subscription.get("wo_left_until_end", 0)
+
+    return (
+        "\n\n⚠️ *Обратите внимание:*\n"
+        f"Неиспользованные занятия: *{unused}*\n"
+        f"Тренировок до конца абонемента: *{wo_left}*\n\n"
+        "Неиспользованные занятия не возмещаются."
+    )
+
+
+def get_unlimited_info(subscription: dict) -> str:
+    """
+    Для безлимита:
+    показываем дату конца и количество оставшихся дней.
+    """
+    if subscription.get("subscription_type") != "unlimited":
+        return ""
+
+    end_date = subscription.get("end_date_raw", "—")
+    days_until_end = str(subscription.get("days_until_end", "")).strip()
+
+    if days_until_end:
+        return (
+            f"\n\n📌 *До конца абонемента:* `{end_date}`\n"
+            f"⏳ *Осталось дней:* `{days_until_end}`"
+        )
+
+    return f"\n\n📌 *До конца абонемента:* `{end_date}`"
+
+
+def get_warning_7_text(subscription: dict) -> str:
+    """
+    Плашка, если колонка warning_7 содержит warning_7
+    """
+    if not has_7_days_warning(subscription):
+        return ""
+
+    end_date = subscription.get("end_date_raw", "—")
+
+    return (
+        "\n\n⏳ *До конца абонемента осталось менее 7 дней.*\n"
+        f"Пожалуйста, внесите оплату за следующий абонемент до *{end_date}*, "
+        "чтобы сохранить место в группе."
+    )
+
+
+def build_subscription_message(subscription: dict) -> str:
+    name = subscription.get("name", "—")
+    group = subscription.get("group", "—")
+    sub_type = subscription.get("subscription_type_raw", "—")
+    start = subscription.get("start_date_raw", "—")
+    end = subscription.get("end_date_raw", "—")
+    usage_text = format_usage(subscription)
+    dates_text = build_visit_dates_text(subscription)
+
+    finished_text = ""
+    if is_finished(subscription):
+        finished_text = "\n\n🔚 *Абонемент завершён*"
+
+    limited_warning = get_limited_subscription_warning(subscription)
+    unlimited_info = get_unlimited_info(subscription)
+    warning_7_text = get_warning_7_text(subscription)
+
+    msg = (
+        f"👤 *Имя:* `{name}`\n"
+        f"🏷️ *Группа:* `{group}`\n"
+        f"🧾 *Абонемент:* `{sub_type}`\n"
+        f"📆 *Срок действия:* `{start} — {end}`\n"
+        f"✅ *Использовано:* `{usage_text}`\n"
+        f"📅 *Даты посещений:*\n{dates_text}"
+        f"{finished_text}"
+        f"{limited_warning}"
+        f"{unlimited_info}"
+        f"{warning_7_text}"
+    )
+
+    return msg
+
+# -----------------------------
+# /check
+# -----------------------------
 
 async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user.username
+    raw_username = update.effective_user.username
     user_id = update.effective_user.id
     full_name = update.effective_user.full_name
 
-    logging.info(f"/check used by {full_name} (@{user}) [ID: {user_id}]")
+    logging.info(f"/check used by {full_name} (@{raw_username}) [ID: {user_id}]")
 
     karina_id = os.getenv("KARINA_ID")
     if karina_id:
         try:
             await context.bot.send_message(
                 chat_id=karina_id,
-                text=f"👀 Команду /check использовал: {full_name} (@{user}) [ID: {user_id}]"
+                text=f"👀 Команду /check использовал: {full_name} (@{raw_username}) [ID: {user_id}]"
             )
         except Exception as e:
             logging.warning(f"Не удалось отправить сообщение админу: {e}")
 
-    # if not user:
-    #     return await update.message.reply_text(
-    #         "❗ У вас не задан Telegram‐username. Пожалуйста, создайте его в настройках Telegram."
-    #     )
+    try:
+        all_subscriptions = load_all_subscriptions()
+    except Exception as e:
+        logging.warning(f"❗ Ошибка при загрузке абонементов: {e}")
+        return await update.message.reply_text("❌ Не удалось прочитать данные абонементов из таблицы.")
 
-    resp = sheets_service.values().get(
-        spreadsheetId=SPREADSHEET_ID,
-        range=SHEET_RANGE
-    ).execute()
-    rows = resp.get('values', [])
-
-    if len(rows) < 2:
+    if not all_subscriptions:
         return await update.message.reply_text("Таблица пуста или недоступна.")
 
-    header = rows[0]
-    try:
-        idx_name = header.index("Имя ребёнка")
-        idx_group = header.index("Группа")
-        idx_start = header.index("Дата начала")
-        idx_end = header.index("Срок действия")
-        idx_used = header.index("Использованно")
-        idx_diff = header.index("Разница")
-        idx_remaining = header.index("Осталось календарных занятий")  # 👈 новое
-        idx_used_left = header.index("Осталось занятий")
-        idx_usercol = header.index("username")
-        idx_idcol = header.index("user_id")
-        visit_cols = [f"{i} посещение" for i in range(1, 9)]
-        idx_dates = [header.index(col) for col in visit_cols]
-    except ValueError as e:
-        return await update.message.reply_text(f"Не найдена колонка в таблице: {e}")
+    user_subscriptions = find_user_subscriptions(
+        all_subscriptions=all_subscriptions,
+        telegram_user_id=user_id,
+        telegram_username=raw_username,
+    )
 
-    # username-сравнение (без @, с нижним регистром)
-    user_rows = []
-
-    # 1. Поиск по username, если он задан
-    raw_user = update.effective_user.username
-    if raw_user:
-        user = raw_user.lstrip('@').lower()
-        for row in rows[1:]:
-            if len(row) <= idx_usercol:
-                continue
-            cell = row[idx_usercol]
-            allowed = [n.strip().lstrip('@').lower() for n in cell.split(',') if n.strip()]
-            if user in allowed:
-                user_rows.append(row)
-
-    # 2. Если по username не найдено — ищем по user_id
-    if not user_rows:
-        try:
-            idx_idcol = header.index("user_id")
-        except ValueError:
-            idx_idcol = None
-
-        if idx_idcol is not None:
-            for row in rows[1:]:
-                if len(row) > idx_idcol:
-                    cell = str(row[idx_idcol])
-                    allowed_ids = [n.strip() for n in cell.split(',') if n.strip()]
-                    if str(user_id) in allowed_ids:
-                        user_rows.append(row)
-
-    # 3. Если всё ещё пусто — сообщение
-    if not user_rows:
+    if not user_subscriptions:
         return await update.message.reply_text(
-            "⚠️ У вас нет активных абонементов, или ваш username не добавлен, пожалуйста, обратитесь к администратору.\n\n"
+            "⚠️ У вас нет активных абонементов, или ваш username / user ID не добавлен в таблицу, пожалуйста, обратитесь к администратору.\n\n"
             "ℹ️ Чтобы узнать *информацию* о расписании, ценах и правилах — воспользуйтесь командой /info.",
             parse_mode="Markdown"
         )
 
-    # Формируем сообщение
-    messages = []
-    for row in user_rows:
-        name = row[idx_name] if len(row) > idx_name else "—"
-        group = row[idx_group] if len(row) > idx_group else "—"
-        start = row[idx_start] if len(row) > idx_start else "—"
-        end = row[idx_end] if len(row) > idx_end else "—"
-        used = row[idx_used] if len(row) > idx_used else "0"
-        # Если абонемент завершён (8 из 8)
-        abonement_finished = ""
-        try:
-            if int(used) == 8:
-                abonement_finished = "\n\n🔚 *Абонемент завершён*"
-        except:
-            pass
-       # Вставка дополнительной строки при наличии значения в "Разница"
-        remaining_info = ""
-        if len(row) > idx_diff and row[idx_diff].strip():
-            used_left = row[idx_used_left].strip() if len(row) > idx_used_left else "—"
-            remaining = row[idx_remaining].strip() if len(row) > idx_remaining else "—"
-            remaining_info = (
-                f"\n\n⚠️ Обратите внимание: у вас осталось *{used_left}* неиспользованных занятий, "
-                f"а до конца срока абонемента — *{remaining}* календарных тренировок."
-            )
-        from datetime import datetime
+    messages = [build_subscription_message(sub) for sub in user_subscriptions]
 
-        expired_warning = ""
-        # Пробуем несколько форматов даты
-        date_formats = ["%d.%m.%Y", "%d/%m/%y", "%d/%m/%Y", "%Y-%m-%d"]
-        for fmt in date_formats:
-            try:
-                end_date = datetime.strptime(end, fmt)
-                today = datetime.now()
-                if end_date.date() < today.date() and int(used) < 8:
-                    expired_warning = f"\n\n‼️ *Срок действия абонемента закончился {end}!*"
-                break  # успешно разобрали, выходим из цикла
-            except ValueError:
-                continue
-        else:
-            logging.warning(f"Не удалось обработать дату окончания абонемента: {end}")
+    await update.message.reply_text(
+        "\n\n".join(messages),
+        parse_mode="Markdown"
+    )
 
 
-        dates = []
-        for i, idx in enumerate(idx_dates, start=1):
-            if len(row) > idx and row[idx].strip():
-                dates.append(f"{i}. {row[idx]}")
-        dates_text = "\n".join(dates) if dates else "—"
+# -----------------------------
+# /expired — пока оставляем как есть
+# -----------------------------
 
-        msg = (
-            f"👤 *Имя:* `{name}`\n"
-            f"🏷️ *Группа:* `{group}`\n"
-            f"📆 *Срок действия:* `{start} — {end}`\n"
-            f"✅ *Использовано:* `{used}` из `8`\n"
-            f"📅 *Даты посещений:*\n{dates_text}"
-            f"{abonement_finished}" 
-            f"{remaining_info}"
-            f"{expired_warning}"
-        )
-        messages.append(msg)
-
-    await update.message.reply_text("\n\n".join(messages), parse_mode="Markdown")
-
-
-# Команда для администратора — вручную проверить завершённые абонементы
 async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     admin_id = os.getenv("ADMIN_ID")
@@ -178,7 +215,6 @@ async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Команда доступна только администратору.")
         return
 
-    # Определим день недели и группы на сегодня
     now = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
     weekday = now.strftime("%A")
 
@@ -196,4 +232,3 @@ async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await check_expired_subscriptions(context.application, today_groups)
     await update.message.reply_text("✅ Проверка завершённых абонементов выполнена.")
-
