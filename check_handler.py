@@ -135,17 +135,18 @@ def get_warning_7_text(subscription: dict) -> str:
     if not has_7_days_warning(subscription):
         return ""
 
-    # 👉 проверяем Unused
-    unused_raw = str(subscription.get("unused", "")).strip()
+    # Для лимитных: если осталось 1 или 0 занятий, warning_7 не показываем
+    if subscription.get("subscription_type") != "unlimited":
+        unused_raw = str(subscription.get("unused", "")).strip()
 
-    try:
-        unused = int(unused_raw)
-    except ValueError:
-        unused = None
-
-    # 👉 если осталось 1 или 0 — НЕ показываем warning_7
-    if unused in (0, 1):
-        return ""
+        try:
+            unused = int(unused_raw)
+        except ValueError:
+            unused = None
+  
+        # 👉 если осталось 1 или 0 — НЕ показываем warning_7
+        if unused in (0, 1):
+            return ""
 
     end_date = subscription.get("end_date_raw", "—")
 
@@ -154,7 +155,6 @@ def get_warning_7_text(subscription: dict) -> str:
         f"Пожалуйста, внесите оплату за следующий абонемент до *{end_date}*, "
         "чтобы сохранить место в группе."
     )
-
 
 def build_subscription_message(subscription: dict) -> str:
     name = subscription.get("name", "—")
