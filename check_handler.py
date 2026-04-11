@@ -77,7 +77,7 @@ def get_limited_subscription_warning(subscription: dict) -> str:
     wo_left = subscription.get("wo_left_until_end", 0)
 
     return (
-        "\n\n⚠️ Неиспользованные занятия: *{unused}*\n"
+        f"\n\n⚠️ Неиспользованные занятия: *{unused}*\n"
         f"Тренировок до конца абонемента: *{wo_left}*\n\n"
         "Неиспользованные занятия не переносятся."
     )
