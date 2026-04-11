@@ -177,7 +177,6 @@ def build_subscription_message(subscription: dict) -> str:
         f"📆 *Срок действия:* `{start} — {end}`\n"
         f"✅ *Использовано:* `{usage_text}`\n"
         f"📅 *Даты посещений:*\n{dates_text}"
-        f"{finished_text}"
         f"{limited_warning}"
         f"{unlimited_info}"
         f"{warning_7_text}"
