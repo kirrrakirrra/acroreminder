@@ -84,11 +84,11 @@ def get_limited_subscription_warning(subscription: dict) -> str:
 
 
 def get_unlimited_info(subscription: dict) -> str:
-    """
-    Для безлимита:
-    показываем дату конца и количество оставшихся дней.
-    """
     if subscription.get("subscription_type") != "unlimited":
+        return ""
+
+    # если уже есть warning_7 — обычный блок не показываем
+    if has_7_days_warning(subscription):
         return ""
 
     end_date = subscription.get("end_date_raw", "—")
