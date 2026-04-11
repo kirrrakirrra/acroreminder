@@ -3,57 +3,69 @@ import os
 GROUPS = [
     {
         "key": "junior_1715",
-        "label": "Младшей группы",
+        "name": "Младшей группы",
         "sheet_group": "4-5 лет (17.15)",
         "display_name": "4-5 лет (17.15)",
         "days": ["Tuesday", "Thursday"],
         "time": "17:15",
         "thread_id": 4,
         "group_id": os.getenv("GROUP_ID_45"),
+        "check_day_offset": 0,
+        "check_window": "day",
     },
     {
         "key": "junior_1830",
-        "label": "Младшей группы NEW",
+        "name": "Младшей группы NEW",
         "sheet_group": "4-5 лет (18.30)",
         "display_name": "4-5 лет (18.30)",
         "days": ["Tuesday", "Thursday"],
         "time": "18:30",
         "thread_id": 5,
         "group_id": os.getenv("GROUP_ID_45"),
+        "check_day_offset": 0,
+        "check_window": "day",
     },
     {
         "key": "69_beginner",
-        "label": "Старшей начинающей группы",
+        "name": "Старшей начинающей группы",
         "sheet_group": "6-9 лет начинающие",
         "display_name": "6-9 лет начинающие",
         "days": ["Monday", "Wednesday", "Friday"],
         "time": "17:15",
         "thread_id": 2225,
         "group_id": os.getenv("GROUP_ID_69"),
+        "check_day_offset": 0,
+        "check_window": "day",
     },
     {
         "key": "69_pro",
-        "label": "Старшей продолжающей группы",
+        "name": "Старшей продолжающей группы",
         "sheet_group": "6-9 лет продолжающие",
         "display_name": "6-9 лет продолжающие",
         "days": ["Monday", "Wednesday", "Friday"],
         "time": "18:30",
         "thread_id": 7,
         "group_id": os.getenv("GROUP_ID_69"),
+        "check_day_offset": 0,
+        "check_window": "day",
     },
     {
         "key": "adult",
-        "label": "Взрослая группа",
+        "name": "Взрослой группы",
         "sheet_group": "Взрослая группа",
         "display_name": "Взрослая группа",
         "days": ["Tuesday", "Thursday"],
         "time": "10:00",
         "thread_id": None,
         "group_id": os.getenv("GROUP_ID_ADULT"),
+        "check_day_offset": 1,
+        "check_window": "evening",
     },
 ]
 
 GROUP_NAME_MAP = {
-    group["label"]: group["sheet_group"]
+    group["name"]: group["sheet_group"]
     for group in GROUPS
 }
+
+SCHEDULE_GROUPS = GROUPS
