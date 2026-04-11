@@ -77,10 +77,9 @@ def get_limited_subscription_warning(subscription: dict) -> str:
     wo_left = subscription.get("wo_left_until_end", 0)
 
     return (
-        "\n\n⚠️ *Обратите внимание:*\n"
-        f"Неиспользованные занятия: *{unused}*\n"
+        "\n\n⚠️ Неиспользованные занятия: *{unused}*\n"
         f"Тренировок до конца абонемента: *{wo_left}*\n\n"
-        "Неиспользованные занятия не возмещаются."
+        "Неиспользованные занятия не переносятся."
     )
 
 
@@ -95,20 +94,57 @@ def get_unlimited_info(subscription: dict) -> str:
     end_date = subscription.get("end_date_raw", "—")
     days_until_end = str(subscription.get("days_until_end", "")).strip()
 
-    if days_until_end:
+    if not days_until_end:
+        return ""
+
+    return (
+        f"\n\n📌 *До конца абонемента:* `{end_date}`\n"
+        f"⏳ *Осталось дней:* `{days_until_end}`"
+    )
+
+def get_payment_reminder_text(subscription: dict) -> str:
+    if subscription.get("subscription_type") == "unlimited":
+        return ""
+
+    unused_raw = str(subscription.get("unused", "")).strip()
+    if unused_raw == "":
+        return ""
+
+    try:
+        unused = int(unused_raw)
+    except ValueError:
+        return ""
+
+    if unused == 1:
         return (
-            f"\n\n📌 *До конца абонемента:* `{end_date}`\n"
-            f"⏳ *Осталось дней:* `{days_until_end}`"
+            "\n\n📌 *Осталось последнее занятие*\n"
+            "Пожалуйста, внесите оплату за следующий абонемент, "
+            "чтобы сохранить место в группе."
         )
 
-    return f"\n\n📌 *До конца абонемента:* `{end_date}`"
+    if unused == 0:
+        return (
+            "\n\n🔚 *Абонемент завершён.*\n"
+            "Не забудьте оплатить следующий абонемент, "
+            "чтобы сохранить место в группе."
+        )
 
+    return ""
 
 def get_warning_7_text(subscription: dict) -> str:
-    """
-    Плашка, если колонка warning_7 содержит warning_7
-    """
     if not has_7_days_warning(subscription):
+        return ""
+
+    # 👉 проверяем Unused
+    unused_raw = str(subscription.get("unused", "")).strip()
+
+    try:
+        unused = int(unused_raw)
+    except ValueError:
+        unused = None
+
+    # 👉 если осталось 1 или 0 — НЕ показываем warning_7
+    if unused in (0, 1):
         return ""
 
     end_date = subscription.get("end_date_raw", "—")
@@ -129,13 +165,10 @@ def build_subscription_message(subscription: dict) -> str:
     usage_text = format_usage(subscription)
     dates_text = build_visit_dates_text(subscription)
 
-    finished_text = ""
-    if is_finished(subscription):
-        finished_text = "\n\n🔚 *Абонемент завершён*"
-
     limited_warning = get_limited_subscription_warning(subscription)
     unlimited_info = get_unlimited_info(subscription)
     warning_7_text = get_warning_7_text(subscription)
+    payment_reminder_text = get_payment_reminder_text(subscription)
 
     msg = (
         f"👤 *Имя:* `{name}`\n"
@@ -148,6 +181,7 @@ def build_subscription_message(subscription: dict) -> str:
         f"{limited_warning}"
         f"{unlimited_info}"
         f"{warning_7_text}"
+        f"{payment_reminder_text}"
     )
 
     return msg
@@ -197,10 +231,8 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     messages = [build_subscription_message(sub) for sub in user_subscriptions]
 
-    await update.message.reply_text(
-        "\n\n".join(messages),
-        parse_mode="Markdown"
-    )
+    for msg in messages:
+        await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 # -----------------------------
