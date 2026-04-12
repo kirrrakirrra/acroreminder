@@ -191,7 +191,7 @@ async def check_expired_subscriptions(app, today_group_names):
             end_date = sub.get("end_date_raw", "—")
             used = sub.get("used", 0)
             unused_raw = str(sub.get("unused", "")).strip()
-            difference = str(sub.get("difference", "")).strip()
+            # difference = str(sub.get("difference", "")).strip()
             wo_left = sub.get("wo_left_until_end", 0)
             days_until_end = str(sub.get("days_until_end", "")).strip()
             end_date = sub.get("end_date_raw", "—")
@@ -233,7 +233,7 @@ async def check_expired_subscriptions(app, today_group_names):
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
 
                     if days_until_end:
-                        parts.append(f"⏳ *Осталось дней:* {days_until_end}")
+                        parts.append(f"\n⏳ *Осталось дней до конца абонемента:* {days_until_end}")
 
                     parts.append(
                         f"\n💳 *Пожалуйста, внесите оплату за следующий абонемент до {end_date}, чтобы сохранить место в группе.*"
@@ -269,22 +269,22 @@ async def check_expired_subscriptions(app, today_group_names):
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
 
                     if days_until_end:
-                        parts.append(f"\n⏳ *Осталось дней:* {days_until_end}")
+                        parts.append(f"\n⏳ *Осталось дней до конца абонемента:* {days_until_end}")
 
                     parts.append(
-                        f"💳 *\nПожалуйста, внесите оплату за следующий абонемент до {end_date}, "
+                        f"\n💳*Пожалуйста, внесите оплату за следующий абонемент до {end_date}, "
                         "чтобы сохранить место в группе.*"
                     )
                     should_send = True
 
-                # Difference добавляем как доп. блок в то же сообщение
-                if difference:
-                    parts.append(
-                        f"\n⚠️ *Осталось занятий:* *{sub.get('unused', 0)}*\n"
-                        f"*Тренировок до конца абонемента:* *{wo_left}*\n"
-                        "_Неиспользованные занятия не переносятся._"
-                    )
-                    should_send = True
+                # # Difference добавляем как доп. блок в то же сообщение
+                # if difference:
+                #     parts.append(
+                #         f"\n⚠️ *Осталось занятий:* *{sub.get('unused', 0)}*\n"
+                #         f"*Тренировок до конца абонемента:* *{wo_left}*\n"
+                #         "_Неиспользованные занятия не переносятся._"
+                #     )
+                #     should_send = True
 
             if should_send:
                 msg = "\n".join(parts)
