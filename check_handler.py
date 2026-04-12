@@ -238,6 +238,11 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 # /expired — пока оставляем как есть
 # -----------------------------
 
+from group_config import GROUP_NAME_MAP
+from scheduler_handler import check_expired_subscriptions, groups
+import datetime
+import os
+
 async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     admin_id = os.getenv("ADMIN_ID")
@@ -249,17 +254,12 @@ async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
     weekday = now.strftime("%A")
 
-    group_name_map = {
-        "Старшей начинающей группы": "6-9 лет начинающие",
-        "Старшей продолжающей группы": "6-9 лет продолжающие",
-        "Младшей группы": "4-5 лет",
-    }
-
     today_groups = [
-        group_name_map.get(group["name"])
+        GROUP_NAME_MAP.get(group["name"])
         for group in groups
         if weekday in group["days"]
     ]
+    today_groups = [g for g in today_groups if g]
 
     await check_expired_subscriptions(context.application, today_groups)
     await update.message.reply_text("✅ Проверка завершённых абонементов выполнена.")
