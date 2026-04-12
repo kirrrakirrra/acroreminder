@@ -303,7 +303,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         
         # Отправляем или обновляем пинг
         if mentions:
-            mention_text = "👋 Родители, пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
+            mention_text = "👋 Пожалуйста, отметьтесь в опросе:\n" + " ".join(mentions)
             if ping_message_id:
                 await app.bot.edit_message_text(
                     chat_id=ADMIN_ID,
@@ -429,3 +429,57 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в refresh_report_callback: {e}")
+
+# Отправляем пинг сообщение в группу
+async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer(cache_time=1)
+
+    try:
+        _, poll_id = query.data.split("|")
+        logging.info(f"📣 Нажата кнопка notify_parents для poll_id={poll_id}")
+
+        resp = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range="Репорты!A2:G"
+        ).execute()
+        rows = resp.get("values", [])
+
+        row = next((r for r in rows if len(r) > 0 and r[0] == poll_id), None)
+
+        if not row:
+            await query.edit_message_text("❌ Не найдена строка в таблице Репорты.")
+            return
+
+        ping_message_id = int(row[3]) if len(row) > 3 and row[3] else None
+        group_chat_id = int(row[4]) if len(row) > 4 and row[4] else None
+        thread_id = int(row[5]) if len(row) > 5 and row[5] else None
+
+        if not ping_message_id:
+            await query.edit_message_text("❌ Не найден ping_message_id в таблице Репорты.")
+            return
+
+        if not group_chat_id:
+            await query.edit_message_text("❌ Не найден group_chat_id в таблице Репорты.")
+            return
+
+        copy_kwargs = {
+            "chat_id": group_chat_id,
+            "from_chat_id": ADMIN_ID,
+            "message_id": ping_message_id,
+        }
+
+        if row[5] if len(row) > 5 else "":
+            copy_kwargs["message_thread_id"] = thread_id
+
+        await context.bot.copy_message(**copy_kwargs)
+
+        await query.edit_message_text("✅ Сообщение с тегами отправлено в группу.")
+        logging.info(f"📨 Пинг скопирован в группу для poll_id={poll_id}")
+
+    except Exception as e:
+        logging.warning(f"❗ Ошибка в notify_parents_callback: {e}")
+        try:
+            await query.edit_message_text("❌ Ошибка при отправке сообщения в группу.")
+        except Exception:
+            pass
