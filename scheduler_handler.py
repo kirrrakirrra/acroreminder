@@ -229,8 +229,7 @@ async def check_expired_subscriptions(app, today_group_names):
                         parts.append(f"⏳ *Осталось дней:* {days_until_end}")
 
                     parts.append(
-                        f"Пожалуйста, внесите оплату за следующий абонемент до *{end_date}*, "
-                        "чтобы сохранить место в группе."
+                        f"\n💳 *Пожалуйста, внесите оплату за следующий абонемент до {end_date}, чтобы сохранить место в группе.*"
                     )
                     should_send = True
 
@@ -244,7 +243,7 @@ async def check_expired_subscriptions(app, today_group_names):
                     parts.append(f"☑️ *Использовано:* {used}")
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                     parts.append(
-                        "Не забудьте оплатить следующий абонемент, "
+                        "\n💳 Не забудьте оплатить следующий абонемент, "
                         "чтобы сохранить место в группе."
                     )
                     should_send = True
@@ -254,8 +253,7 @@ async def check_expired_subscriptions(app, today_group_names):
                     parts.append(f"☑️ *Использовано:* {used}")
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                     parts.append(
-                        "Пожалуйста, внесите оплату за следующий абонемент, "
-                        "чтобы сохранить место в группе."
+                        "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, чтобы сохранить место в группе.*"
                     )
                     should_send = True
 
@@ -264,11 +262,11 @@ async def check_expired_subscriptions(app, today_group_names):
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
 
                     if days_until_end:
-                        parts.append(f"⏳ *Осталось дней:* {days_until_end}")
+                        parts.append(f"\n⏳ *Осталось дней:* {days_until_end}")
 
                     parts.append(
-                        f"Пожалуйста, внесите оплату за следующий абонемент до *{end_date}*, "
-                        "чтобы сохранить место в группе."
+                        f"💳 *Пожалуйста, внесите оплату за следующий абонемент до {end_date}, "
+                        "чтобы сохранить место в группе.*"
                     )
                     should_send = True
 
@@ -276,8 +274,8 @@ async def check_expired_subscriptions(app, today_group_names):
                 if difference:
                     parts.append(
                         f"\n⚠️ *Осталось занятий:* *{sub.get('unused', 0)}*\n"
-                        f"*Тренировок до конца абонемента:* *{wo_left}*\n\n"
-                        "Неиспользованные занятия не переносятся."
+                        f"*Тренировок до конца абонемента:* *{wo_left}*\n"
+                        "_Неиспользованные занятия не переносятся._"
                     )
                     should_send = True
 
