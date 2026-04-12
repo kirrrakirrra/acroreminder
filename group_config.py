@@ -54,7 +54,7 @@ GROUPS = [
         "name": "Взрослой группы",
         "sheet_group": "Взрослая группа",
         "display_name": "Взрослой группы",
-        "days": ["Monday", "Tuesday", "Thursday"],
+        "days": ["Tuesday", "Thursday"],
         "time": "10:00",
         "thread_id": None,
         #"thread_id": 105,
