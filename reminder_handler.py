@@ -407,8 +407,8 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
                 return None
 
         group_name = row[1]
-        report_message_id = int(row[2]) if len(row) > 2 and row[2] else None
-        ping_message_id = int(row[3]) if len(row) > 3 and row[3] else None
+        report_message_id = safe_int(row[2]) if len(row) > 2 else None
+        ping_message_id = safe_int(row[3]) if len(row) > 3 else None
 
         poll_to_group[poll_id] = {"name": group_name}
 
