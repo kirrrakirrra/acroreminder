@@ -48,12 +48,21 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("ℹ️ Нет репортов на сегодня в таблице Репорты.")
             return
 
+        def safe_int(value):
+            text = str(value).strip() if value is not None else ""
+            if not text or text.lower() == "none":
+                return None
+            try:
+                return int(text)
+            except ValueError:
+                return None
+
         count = 0
         for row in today_rows:
             poll_id = row[0]
             group_name = row[1]
-            report_message_id = int(row[2]) if len(row) > 2 and row[2] else None
-            ping_message_id = int(row[3]) if len(row) > 3 and row[3] else None
+            report_message_id = safe_int(row[2]) if len(row) > 2 else None
+            ping_message_id = safe_int(row[3]) if len(row) > 3 else None
 
             poll_to_group[poll_id] = {"name": group_name}
             await send_admin_report(
