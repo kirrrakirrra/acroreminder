@@ -57,7 +57,7 @@ GROUPS = [
         "days": ["Monday", "Tuesday", "Thursday"],
         "time": "10:00",
         #"thread_id": None,
-        "thread_id": 105
+        "thread_id": 105,
         "group_id": os.getenv("GROUP_ID_ADULT"),
         "check_day_offset": 1,
         "check_window": "evening",
