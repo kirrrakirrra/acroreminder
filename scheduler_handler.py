@@ -192,13 +192,22 @@ async def check_expired_subscriptions(app, today_group_names):
             difference = str(sub.get("difference", "")).strip()
             wo_left = sub.get("wo_left_until_end", 0)
             days_until_end = str(sub.get("days_until_end", "")).strip()
+            end_date = sub.get("end_date_raw", "—")
             visit_dates = sub.get("visit_dates", [])
             warning_7 = str(sub.get("warning_7", "")).strip().lower() == "warning_7"
+
+            # ❗ Разовые не включаем в отчёт по абонементам
+            if sub_type == "drop_in":
+                continue
 
             try:
                 unused = int(unused_raw) if unused_raw != "" else None
             except ValueError:
                 unused = None
+
+            dates_text = "\n".join(
+                [f"{i}. {d}" for i, d in enumerate(visit_dates, start=1)]
+            ) if visit_dates else "—"
 
             parts = [
                 f"👤 *Имя:* {name}",
@@ -214,8 +223,15 @@ async def check_expired_subscriptions(app, today_group_names):
             if sub_type == "unlimited":
                 if warning_7:
                     parts.insert(0, "⏳ *До конца абонемента осталось менее 7 дней*")
+                    parts.append(f"📅 *Даты посещений:*\n{dates_text}")
+
                     if days_until_end:
                         parts.append(f"⏳ *Осталось дней:* {days_until_end}")
+
+                    parts.append(
+                        f"Пожалуйста, внесите оплату за следующий абонемент до *{end_date}*, "
+                        "чтобы сохранить место в группе."
+                    )
                     should_send = True
 
             # ----------------------------
@@ -226,20 +242,34 @@ async def check_expired_subscriptions(app, today_group_names):
                 if unused == 0:
                     parts.insert(0, "🔚 *Абонемент завершён*")
                     parts.append(f"☑️ *Использовано:* {used}")
-
-                    dates_text = "\n".join([f"• {d}" for d in visit_dates]) if visit_dates else "—"
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
+                    parts.append(
+                        "Не забудьте оплатить следующий абонемент, "
+                        "чтобы сохранить место в группе."
+                    )
                     should_send = True
 
                 elif unused == 1:
                     parts.insert(0, "📌 *В абонементе осталось 1 занятие*")
                     parts.append(f"☑️ *Использовано:* {used}")
+                    parts.append(f"📅 *Даты посещений:*\n{dates_text}")
+                    parts.append(
+                        "Пожалуйста, внесите оплату за следующий абонемент, "
+                        "чтобы сохранить место в группе."
+                    )
                     should_send = True
 
                 elif warning_7:
                     parts.insert(0, "⏳ *До конца абонемента осталось менее 7 дней*")
+                    parts.append(f"📅 *Даты посещений:*\n{dates_text}")
+
                     if days_until_end:
                         parts.append(f"⏳ *Осталось дней:* {days_until_end}")
+
+                    parts.append(
+                        f"Пожалуйста, внесите оплату за следующий абонемент до *{end_date}*, "
+                        "чтобы сохранить место в группе."
+                    )
                     should_send = True
 
                 # Difference добавляем как доп. блок в то же сообщение
