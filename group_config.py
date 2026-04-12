@@ -6,7 +6,7 @@ GROUPS = [
         "name": "Младшей группы",
         "sheet_group": "4-5 лет (17.15)",
         "display_name": "🐼 Младшей группы",
-        "days": ["Sunday", "Tuesday", "Thursday"],
+        "days": ["Tuesday", "Thursday"],
         "time": "17:15",
         "thread_id": 4,
         "group_id": os.getenv("GROUP_ID_45"),
