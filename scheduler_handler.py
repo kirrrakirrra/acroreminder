@@ -233,7 +233,7 @@ async def check_expired_subscriptions(app, today_group_names):
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
 
                     if days_until_end:
-                        parts.append(f"\n⏳ *Осталось дней до конца абонемента:* {days_until_end}")
+                        parts.append(f"\n⏳ Осталось дней до конца абонемента: *{days_until_end}*")
 
                     parts.append(
                         f"\n💳 *Пожалуйста, внесите оплату за следующий абонемент до {end_date}, чтобы сохранить место в группе.*"
