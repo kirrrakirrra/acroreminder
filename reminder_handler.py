@@ -8,6 +8,8 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
 
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
+
 # delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 1))
 REPORT_HOUR_DAY = int(os.getenv("REPORT_HOUR_DAY", 15))
 REPORT_HOUR_MORNING = int(os.getenv("REPORT_HOUR_MORNING", 8))
@@ -395,6 +397,15 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
             await query.edit_message_text("❌ Не найдена связка в таблице Репорты.")
             return
 
+        def safe_int(value):
+            text = str(value).strip() if value is not None else ""
+            if not text or text.lower() == "none":
+                return None
+            try:
+                return int(text)
+            except ValueError:
+                return None
+
         group_name = row[1]
         report_message_id = int(row[2]) if len(row) > 2 and row[2] else None
         ping_message_id = int(row[3]) if len(row) > 3 and row[3] else None
@@ -418,7 +429,10 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
                         spreadsheetId=SPREADSHEET_ID,
                         range=update_range,
                         valueInputOption="RAW",
-                        body={"values": [[str(new_report_id), str(new_ping_id)]]}
+                        safe_report_id = str(new_report_id) if new_report_id is not None else ""
+                        safe_ping_id = str(new_ping_id) if new_ping_id is not None else ""
+                        
+                        body={"values": [[safe_report_id, safe_ping_id]]}
                     ).execute()
                     logging.info(f"✏️ Обновлены message_id в строке {i} для poll_id={poll_id}")
                     break
