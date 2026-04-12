@@ -187,6 +187,8 @@ async def check_expired_subscriptions(app, today_group_names):
             group = sub.get("group", "—")
             sub_type = sub.get("subscription_type")
             sub_type_raw = sub.get("subscription_type_raw", "—")
+            start_date = sub.get("start_date_raw", "—")
+            end_date = sub.get("end_date_raw", "—")
             used = sub.get("used", 0)
             unused_raw = str(sub.get("unused", "")).strip()
             difference = str(sub.get("difference", "")).strip()
@@ -195,6 +197,10 @@ async def check_expired_subscriptions(app, today_group_names):
             end_date = sub.get("end_date_raw", "—")
             visit_dates = sub.get("visit_dates", [])
             warning_7 = str(sub.get("warning_7", "")).strip().lower() == "warning_7"
+
+            logging.info(
+                f"[expired-debug] name={name}, raw={sub_type_raw}, normalized={sub_type}, unused={unused_raw}, warning_7={warning_7}"
+            )
 
             # ❗ Разовые не включаем в отчёт по абонементам
             if sub_type == "drop_in":
@@ -213,6 +219,7 @@ async def check_expired_subscriptions(app, today_group_names):
                 f"👤 *Имя:* {name}",
                 f"🏷️ *Группа:* {group}",
                 f"🧾 *Абонемент:* {sub_type_raw}",
+                f"📆 *Срок действия:* {start_date} — {end_date}",
             ]
 
             should_send = False
@@ -220,7 +227,7 @@ async def check_expired_subscriptions(app, today_group_names):
             # ----------------------------
             # Безлимит
             # ----------------------------
-            if sub_type == "unlimited":
+            if sub_type == "unlimited" or sub_type_raw.strip().lower() == "безлимит":
                 if warning_7:
                     parts.insert(0, "⏳ *До конца абонемента осталось менее 7 дней*")
                     parts.append(f"📅 *Даты посещений:*\n{dates_text}")
@@ -265,7 +272,7 @@ async def check_expired_subscriptions(app, today_group_names):
                         parts.append(f"\n⏳ *Осталось дней:* {days_until_end}")
 
                     parts.append(
-                        f"💳 *Пожалуйста, внесите оплату за следующий абонемент до {end_date}, "
+                        f"💳 *\nПожалуйста, внесите оплату за следующий абонемент до {end_date}, "
                         "чтобы сохранить место в группе.*"
                     )
                     should_send = True
