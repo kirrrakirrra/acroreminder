@@ -49,7 +49,7 @@ def get_decision_keyboard(group_id):
 async def ask_admin(app, group_id, group):
     msg = await app.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"Сегодня занятие для {group['name']} в {group['time']} по расписанию?",
+        text=f"Сегодня занятие для {group['display_name']} в {group['time']} по расписанию?",
         reply_markup=get_decision_keyboard(group_id)
     )
    # pending[msg.message_id] = group
@@ -68,12 +68,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=group["group_id"],
                 message_thread_id=group["thread_id"],
-                text=f"Доброго дня! Занятие для {group['name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
+                text=f"Доброго дня! Занятие для {group['display_name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
             )
         else:
             await context.bot.send_message(
                 chat_id=group["group_id"],
-                text=f"Доброго дня! Занятие для {group['name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
+                text=f"Доброго дня! Занятие для {group['display_name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
             )
     
         # Опрос
