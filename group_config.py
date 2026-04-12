@@ -42,7 +42,7 @@ GROUPS = [
         "name": "Старшей продолжающей группы",
         "sheet_group": "6-9 лет продолжающие",
         "display_name": "6-9 лет продолжающие",
-        "days": ["Monday", "Wednesday", "Friday"],
+        "days": ["Sunday", "Monday", "Wednesday", "Friday"],
         "time": "18:30",
         "thread_id": 7,
         "group_id": os.getenv("GROUP_ID_69"),
