@@ -11,7 +11,7 @@ from start_handler import get_start_handler
 from check_handler import check_subscriptions, expired_command
 from info_handler import info_command, info_callback
 from report_handler import report_command
-from reminder_handler import handle_poll_answer, restore_poll_to_group, refresh_report_callback
+from reminder_handler import handle_poll_answer, restore_poll_to_group, refresh_report_callback, notify_parents_callback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import (
@@ -87,6 +87,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(handle_callback, pattern="^(yes|skip)\|"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern="^info\|"))
     app.add_handler(CallbackQueryHandler(refresh_report_callback, pattern="^refresh_report\|"))
+    app.add_handler(CallbackQueryHandler(notify_parents_callback, pattern="^notify_parents\\|"))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
     app.add_error_handler(error_handler)
 
