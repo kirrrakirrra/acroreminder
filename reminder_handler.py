@@ -9,8 +9,15 @@ from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
 
 # delay_minutes = int(os.getenv("REPORT_DELAY_MINUTES", 1))
-report_hour = int(os.getenv("REPORT_HOUR", 15))
-report_minute = int(os.getenv("REPORT_MINUTE", 10))
+REPORT_HOUR_DAY = int(os.getenv("REPORT_HOUR_DAY", 15))
+REPORT_HOUR_MORNING = int(os.getenv("REPORT_HOUR_MORNING", 8))
+REPORT_MINUTE = int(os.getenv("REPORT_MINUTE", 10))
+
+# фильтруем по названию группы, позже можно добавить report window в сеттинг групп
+def get_report_hour(group: dict) -> int:
+    if group["name"] == "Взрослой группы":
+        return REPORT_HOUR_MORNING
+    return REPORT_HOUR_DAY
 
 # Хранилище голосов в памяти (резервный вариант) и poll_id → group
 poll_votes = {}
@@ -130,8 +137,9 @@ async def schedule_report(app, group, poll_id):
     #     await asyncio.sleep(delay_seconds)
     #     await send_admin_report(app, poll_id)
     #     return
-        
-    report_time = now.replace(hour=report_hour, minute=report_minute, second=0, microsecond=0)
+
+    report_hour = get_report_hour(group)
+    report_time = now.replace(hour=report_hour, minute=REPORT_MINUTE, second=0, microsecond=0)
 
     # ⛔ Если уже позже — НЕ ОТПРАВЛЯЕМ
     if report_time <= now:
@@ -223,7 +231,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             elif "пропускаем" in voted:
                 voted_absent.append(child_info)
             elif not voted:
-                if pause == "TRUE":
+                if pause == "ПАУЗА":
                     not_voted_paused.append(child_info)
                 elif pause == "РАЗОВО":
                     not_voted_one_time.append(child_info)
@@ -290,7 +298,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             voted = safe_get(row, idx_voted)
             username = safe_get(row, idx_username)
         
-            if not voted and pause != "TRUE" and username:
+            if not voted and pause != "ПАУЗА" and username:
                 mentions.append(f"@{username}")
         
         # Отправляем или обновляем пинг
