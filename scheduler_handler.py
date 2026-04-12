@@ -203,7 +203,7 @@ async def check_expired_subscriptions(app, today_group_names):
             )
 
             # ❗ Разовые не включаем в отчёт по абонементам
-            if sub_type == "drop_in" or sub_type_raw_lower == "разово":
+            if sub_type == "drop_in" or sub_type_raw.lower() == "разово":
                 continue
 
             try:
