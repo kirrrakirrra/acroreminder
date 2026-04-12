@@ -59,11 +59,11 @@ def normalize_subscription_type(raw_type: str) -> str:
     value = (raw_type or "").strip().lower()
 
     mapping = {
-        "безлимит": "unlimited",
-        "абон 8": "sub_8",
-        "абон 5": "sub_5",
-        "пробный абон 3": "sub_3_trial",
-        "разовый": "drop_in",
+        "Безлимит": "unlimited",
+        "Абон 8": "sub_8",
+        "Абон 5": "sub_5",
+        "Пробный абон 3": "sub_3_trial",
+        "Разово": "drop_in",
     }
     return mapping.get(value, value)
 
