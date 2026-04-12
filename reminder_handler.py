@@ -169,7 +169,6 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
     logging.info(f"📤 Готовим отчёт по poll_id={poll_id} для группы: {group['name']}")
 
     try:
-        from scheduler_handler import ADMIN_ID
         
         group_name_code = group["name"]
 
@@ -342,24 +341,28 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             for i, row in enumerate(rows, start=2):  # строки начинаются с A2
                 if row[0] == poll_id:
                     found = True
+            
+                    safe_report_id = str(report_msg_id) if report_msg_id is not None else ""
+                    safe_ping_id = str(ping_msg_id) if ping_msg_id is not None else ""
+            
                     sheets_service.values().update(
                         spreadsheetId=SPREADSHEET_ID,
                         range=f"Репорты!C{i}:D{i}",
                         valueInputOption="USER_ENTERED",
-                        body={"values": [[
-                            str(report_msg_id),
-                            str(ping_msg_id)
-                        ]]}
+                        body={"values": [[safe_report_id, safe_ping_id]]}
                     ).execute()
+            
                     logging.info(f"✏️ Обновлены message_id в строке {i}")
                     break
         
             if not found and report_msg:
+                safe_report_id = str(report_msg_id) if report_msg_id is not None else ""
+                safe_ping_id = str(ping_msg_id) if ping_msg_id is not None else ""
                 new_row = [[
-                    poll_id.strip(),
+                    str(poll_id).strip(),
                     group_name_code,
-                    str(report_msg_id),
-                    str(ping_msg_id) if ping_msg else "",
+                    safe_report_id,
+                    safe_ping_id,
                     "", "", ""
                 ]]
                 sheets_service.values().append(
@@ -420,18 +423,20 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
             ping_message_id=ping_message_id
         )
 
+
         # 3️⃣ Если message_id изменились — обновляем строку в таблице
         try:
             for i, r in enumerate(rows, start=2):  # начинаем с A2
                 if r[0] == poll_id:
                     update_range = f"Репорты!C{i}:D{i}"
+
+                    safe_report_id = str(new_report_id) if new_report_id is not None else ""
+                    safe_ping_id = str(new_ping_id) if new_ping_id is not None else ""
+                    
                     sheets_service.values().update(
                         spreadsheetId=SPREADSHEET_ID,
                         range=update_range,
                         valueInputOption="RAW",
-                        safe_report_id = str(new_report_id) if new_report_id is not None else ""
-                        safe_ping_id = str(new_ping_id) if new_ping_id is not None else ""
-                        
                         body={"values": [[safe_report_id, safe_ping_id]]}
                     ).execute()
                     logging.info(f"✏️ Обновлены message_id в строке {i} для poll_id={poll_id}")
@@ -449,6 +454,15 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer(cache_time=1)
 
+    def safe_int(value):
+        text = str(value).strip() if value is not None else ""
+        if not text or text.lower() == "none":
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
+
     try:
         _, poll_id = query.data.split("|")
         logging.info(f"📣 Нажата кнопка notify_parents для poll_id={poll_id}")
@@ -465,9 +479,9 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
             await query.edit_message_text("❌ Не найдена строка в таблице Репорты.")
             return
 
-        ping_message_id = int(row[3]) if len(row) > 3 and row[3] else None
-        group_chat_id = int(row[4]) if len(row) > 4 and row[4] else None
-        thread_id = int(row[5]) if len(row) > 5 and row[5] else None
+        ping_message_id = safe_int(row[3]) if len(row) > 3 else None
+        group_chat_id = safe_int(row[4]) if len(row) > 4 else None
+        thread_id = safe_int(row[5]) if len(row) > 5 else None
 
         if not ping_message_id:
             await query.edit_message_text("❌ Не найден ping_message_id в таблице Репорты.")
