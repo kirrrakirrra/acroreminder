@@ -92,7 +92,7 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Рядом:Scenia Bay, Shama book bakery, Marisan\n\n"
                 "🗺 [Открыть в Google Maps](https://maps.app.goo.gl/PzUYSZNyid4P2gwd7?g_st=com.google.maps.preview.copy)\n"
                 "📸 Фото фасада зала:\n" 
-                "↳[Чат 4-5 лет](https://t.me/c/3757833438/1/19 )\n"
+                "↳[Чат 4-5 лет](https://t.me/c/3757833438/1/19)\n"
                 "↳[Чат 6-9 лет](https://t.me/c/1820363527/1/2747)\n"
                 "↳[Чат Взрослой группы](https://t.me/c/3963339870/8)"
         ),
