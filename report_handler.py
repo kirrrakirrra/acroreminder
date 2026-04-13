@@ -28,7 +28,9 @@ def is_authorized(user_id: int) -> bool:
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not is_authorized(user_id):
-        await update.message.reply_text("⛔ У вас нет доступа к этой команде.")
+        await update.message.reply_text(
+            "⛔ Эта команда доступна только администратору.\n"
+            "Для проверки абонемента воспользуйтесь командой /check.")
         return
 
     try:
