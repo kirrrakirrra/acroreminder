@@ -248,7 +248,10 @@ async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_id = os.getenv("ADMIN_ID")
 
     if str(user_id) != str(admin_id):
-        await update.message.reply_text("⛔ Команда доступна только администратору.")
+        await update.message.reply_text(
+            "⛔ Эта команда доступна только администратору.\n"
+            "Для проверки абонемента воспользуйтесь командой /check."
+        )
         return
 
     now = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
