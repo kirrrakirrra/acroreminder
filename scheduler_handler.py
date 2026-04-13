@@ -49,7 +49,7 @@ def get_decision_keyboard(group_id):
 async def ask_admin(app, group_id, group):
     msg = await app.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"Сегодня занятие для {group['display_name']} в {group['time']} по расписанию?",
+        text=f"Занятие для {group['display_name']} {group['lesson_day_text']} в {group['time']} по расписанию?",
         reply_markup=get_decision_keyboard(group_id)
     )
    # pending[msg.message_id] = group
@@ -68,7 +68,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=group["group_id"],
                 message_thread_id=group["thread_id"],
-                text=f"Доброго дня! Занятие для {group['display_name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
+                text=f"Доброго дня! Занятие для {group['display_name']} по расписанию {group['lesson_day_text']} в {group['time']} 🤸🏻🤸🏻‍♀️"
             )
         else:
             await context.bot.send_message(
@@ -81,7 +81,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if group.get("thread_id") is not None:
                 poll_msg = await context.bot.send_poll(
                     chat_id=group["group_id"],
-                    question="Кто будет сегодня на занятии?",
+                    question="Кто будет {group['lesson_day_text']} на занятии?",
                     options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
                     is_anonymous=False,
                     allows_multiple_answers=False,
@@ -90,7 +90,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 poll_msg = await context.bot.send_poll(
                     chat_id=group["group_id"],
-                    question="Кто будет сегодня на занятии?",
+                    question="Кто будет {group['lesson_day_text']} на занятии?",
                     options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
                     is_anonymous=False,
                     allows_multiple_answers=False,
