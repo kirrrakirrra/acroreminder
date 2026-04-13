@@ -68,12 +68,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=group["group_id"],
                 message_thread_id=group["thread_id"],
-                text=f"Доброго дня! Занятие для {group['display_name']} по расписанию {group['lesson_day_text']} в {group['time']} 🤸🏻🤸🏻‍♀️"
+                text=f"Доброго дня! Занятие для {group['display_name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
             )
         else:
             await context.bot.send_message(
                 chat_id=group["group_id"],
-                text=f"Доброго дня! Занятие для {group['display_name']} по расписанию в {group['time']} 🤸🏻🤸🏻‍♀️"
+                text=f"Доброго дня! Тренировка для {group['display_name']} по расписанию {group['lesson_day_text']} в {group['time']} 🤸🏻🤸🏻‍♀️"
             )
     
         # Опрос
@@ -81,7 +81,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if group.get("thread_id") is not None:
                 poll_msg = await context.bot.send_poll(
                     chat_id=group["group_id"],
-                    question="Кто будет {group['lesson_day_text']} на занятии?",
+                    question="Кто будет сегодня на занятии?",
                     options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
                     is_anonymous=False,
                     allows_multiple_answers=False,
@@ -90,7 +90,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 poll_msg = await context.bot.send_poll(
                     chat_id=group["group_id"],
-                    question="Кто будет {group['lesson_day_text']} на занятии?",
+                    question="Кто будет завтра на тренировке?",
                     options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
                     is_anonymous=False,
                     allows_multiple_answers=False,
