@@ -12,6 +12,8 @@ GROUPS = [
         "group_id": os.getenv("GROUP_ID_45"),
         "check_day_offset": 0,
         "check_window": "day",
+        "lesson_day_text": "сегодня",
+        
     },
     {
         "key": "junior_1830",
@@ -24,6 +26,7 @@ GROUPS = [
         "group_id": os.getenv("GROUP_ID_45"),
         "check_day_offset": 0,
         "check_window": "day",
+        "lesson_day_text": "сегодня",
     },
     {
         "key": "69_beginner",
@@ -36,6 +39,7 @@ GROUPS = [
         "group_id": os.getenv("GROUP_ID_69"),
         "check_day_offset": 0,
         "check_window": "day",
+        "lesson_day_text": "сегодня",
     },
     {
         "key": "69_pro",
@@ -48,6 +52,7 @@ GROUPS = [
         "group_id": os.getenv("GROUP_ID_69"),
         "check_day_offset": 0,
         "check_window": "day",
+        "lesson_day_text": "сегодня",
     },
     {
         "key": "adult",
@@ -61,6 +66,7 @@ GROUPS = [
         "group_id": os.getenv("GROUP_ID_ADULT"),
         "check_day_offset": 1,
         "check_window": "evening",
+        "lesson_day_text": "завтра",
     },
 ]
 
