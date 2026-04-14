@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group
 from reminder_handler import schedule_report
 from utils import now_local,format_now
-from datetime import datetime
+from datetime import datetime, timedelta
 from group_config import GROUPS, GROUP_NAME_MAP
 from subscription_tools import load_all_subscriptions
 import asyncio
@@ -121,6 +121,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 2. Записать запланированный отчёт в таблицу "Репорты"
             try:
+                report_date = now_local().date()
+                if group["name"] == "Взрослой группы":
+                    report_date = report_date + timedelta(days=1)
+                
                 new_row = [[
                     poll_msg.poll.id,
                     group["name"],
@@ -128,7 +132,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "",  # ping_message_id
                     str(group["group_id"]),
                     str(group["thread_id"]) if group.get("thread_id") is not None else "",
-                    now_local().strftime("%Y-%m-%d")
+                    report_date.strftime("%Y-%m-%d")
                 ]]
                 sheets_service.values().append(
                     spreadsheetId=SPREADSHEET_ID,
