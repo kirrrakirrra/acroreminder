@@ -221,6 +221,12 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         telegram_username=raw_username,
     )
 
+    # Убираем разовые — для /check они не считаются абонементами
+    user_subscriptions = [
+        sub for sub in user_subscriptions
+        if sub.get("subscription_type") != "drop_in"
+    ]
+
     if not user_subscriptions:
         return await update.message.reply_text(
             "⚠️ У вас нет активных абонементов, или ваш username / user ID не добавлен в таблицу, пожалуйста, обратитесь к администратору.\n\n"
