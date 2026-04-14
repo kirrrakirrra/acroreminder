@@ -141,12 +141,22 @@ async def schedule_report(app, group, poll_id):
     #     return
 
     report_hour = get_report_hour(group)
-    report_time = now.replace(hour=report_hour, minute=REPORT_MINUTE, second=0, microsecond=0)
-
-    # ⛔ Если уже позже — НЕ ОТПРАВЛЯЕМ
+    report_time = now.replace(
+        hour=report_hour,
+        minute=REPORT_MINUTE,
+        second=0,
+        microsecond=0
+    )
+    
     if report_time <= now:
-        logging.warning(f"⚠️ Время отправки отчета уже прошло ({report_time.strftime('%H:%M')}), отчёт не будет отправлен.")
-        return
+        if group["name"] == "Взрослой группы":
+            report_time = report_time + timedelta(days=1)
+        else:
+            logging.warning(
+                f"⚠️ Время отправки отчета уже прошло "
+                f"({report_time.strftime('%Y-%m-%d %H:%M')}), отчёт не будет отправлен."
+            )
+            return
 
     delay_seconds = (report_time - now).total_seconds()
     logging.info(f"🕒 Ожидаем {int(delay_seconds)} секунд до отчета в {report_time.strftime('%H:%M')}")
