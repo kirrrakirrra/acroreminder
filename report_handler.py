@@ -65,13 +65,15 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             group_name = row[1]
             report_message_id = safe_int(row[2]) if len(row) > 2 else None
             ping_message_id = safe_int(row[3]) if len(row) > 3 else None
+            deposit_message_id = safe_int(row[4]) if len(row) > 4 else None
 
             poll_to_group[poll_id] = {"name": group_name}
             await send_admin_report(
                 app=context.application,
                 poll_id=poll_id,
                 report_message_id=report_message_id,
-                ping_message_id=ping_message_id
+                ping_message_id=ping_message_id,
+                deposit_message_id=deposit_message_id
             )
             count += 1
 
