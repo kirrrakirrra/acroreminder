@@ -370,6 +370,11 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         not_paid.sort()
         deposits.sort()
 
+        logging.info(
+            f"💰 Депозиты для {group_name_code}: "
+            f"не оплачено={len(not_paid)}, депозиты={len(deposits)}"
+        )
+
         deposit_parts = []
 
         if not_paid:
@@ -388,22 +393,22 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             deposit_msg = "\n".join(deposit_parts)
         else:
             deposit_msg = "💰 Депозитов и долгов не записано ✅"
-
-            if deposit_message_id:
-                await app.bot.edit_message_text(
-                    chat_id=ADMIN_ID,
-                    message_id=deposit_message_id,
-                    text=deposit_msg,
-                    parse_mode="Markdown"
-                )
-                logging.info(f"♻️ Обновлено сообщение депозитов {deposit_message_id}")
-            else:
-                deposit_msg_obj = await app.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=deposit_msg,
-                    parse_mode="Markdown"
-                )
-                logging.info(f"📨 Отправлено новое сообщение депозитов (msg_id={deposit_msg_obj.message_id})")
+        
+        if deposit_message_id:
+            await app.bot.edit_message_text(
+                chat_id=ADMIN_ID,
+                message_id=deposit_message_id,
+                text=deposit_msg,
+                parse_mode="Markdown"
+            )
+            logging.info(f"♻️ Обновлено сообщение депозитов {deposit_message_id}")
+        else:
+            deposit_msg_obj = await app.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=deposit_msg,
+                parse_mode="Markdown"
+            )
+            logging.info(f"📨 Отправлено новое сообщение депозитов (msg_id={deposit_msg_obj.message_id})")
        
 
         # Сохраняем ID сообщений, если они новые
@@ -532,7 +537,10 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
         except Exception as e:
             logging.warning(f"❗ Ошибка при обновлении связки в Репорты: {e}")
 
-        logging.info(f"✅ Обновление отчёта завершено: new_report_id={new_report_id}, new_ping_id={new_ping_id}")
+        logging.info(
+            f"✅ Обновление отчёта завершено: "
+            f"report={new_report_id}, ping={new_ping_id}, deposit={new_deposit_id}"
+        )
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в refresh_report_callback: {e}")
