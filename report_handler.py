@@ -77,7 +77,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             count += 1
 
-        await update.message.reply_text(f"✅ Отправлено {count} отчётов за {today}.")
+        await update.message.reply_text(f"✅ Отчёты обработаны.")
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в report_command: {e}")
