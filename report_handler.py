@@ -39,12 +39,12 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Получаем строки из таблицы "Репорты"
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range="Репорты!A2:G"
+            range="Репорты!A2:H"
         ).execute()
         rows = resp.get("values", [])
 
         # Фильтруем только сегодняшние
-        today_rows = [r for r in rows if len(r) >= 7 and r[6].startswith(today)]
+        today_rows = [r for r in rows if len(r) >= 8 and r[7].startswith(today)]
 
         if not today_rows:
             await update.message.reply_text("ℹ️ Нет репортов на сегодня в таблице Репорты.")
