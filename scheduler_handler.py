@@ -130,7 +130,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     group["name"],
                     "",  # report_message_id
                     "",  # ping_message_id
-                    "",  # deposit_message_id
                     str(group["group_id"]),
                     str(group["thread_id"]) if group.get("thread_id") is not None else "",
                     report_date.strftime("%Y-%m-%d")
