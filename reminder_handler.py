@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import re
-from utils import now_local, format_now
+from utils import now_local, format_now, notify_karina_action
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
@@ -395,6 +395,8 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer(cache_time=1)
     _, poll_id = query.data.split("|")
+    user = update.effective_user
+    await notify_karina_action(context, user, f"🔄 Обновление отчёта\npoll_id={poll_id}")
     logging.info(f"🔄 Нажата кнопка обновления для poll_id={poll_id}")
 
     try:
@@ -476,6 +478,8 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
     try:
         _, poll_id = query.data.split("|")
         logging.info(f"📣 Нажата кнопка notify_parents для poll_id={poll_id}")
+        user = update.effective_user
+        await notify_karina_action(context, user, f"📣 Отправка родителям\npoll_id={poll_id}")
 
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
