@@ -15,7 +15,6 @@ REPORT_HOUR_DAY = int(os.getenv("REPORT_HOUR_DAY", 15))
 REPORT_HOUR_MORNING = int(os.getenv("REPORT_HOUR_MORNING", 8))
 REPORT_MINUTE = int(os.getenv("REPORT_MINUTE", 10))
 
-# ------------------------------------------------------------------------------------
 # фильтруем по названию группы, позже можно добавить report window в сеттинг групп
 def get_report_hour(group: dict) -> int:
     if group["name"] == "Взрослой группы":
@@ -102,7 +101,6 @@ async def handle_poll_answer(update, context):
     except Exception as e:
         logging.warning(f"❗ Не удалось записать голос в таблицу: {e}")
 
-# ------------------------------------------------------------------------------------
 # 🧠 Восстанавливаем poll_id → group_name при запуске
 def restore_poll_to_group():
     """
@@ -171,10 +169,9 @@ def escape_md(text):
     Экранирует спецсимволы Markdown (v1), чтобы избежать ошибок Telegram.
     """
     return re.sub(r'([_*[\]()])', r'\\\1', text)
-
-# ------------------------------------------------------------------------------------    
+    
 # Отправка отчёта админу  
-async def send_admin_report(app, poll_id, report_message_id=None, ping_message_id=None, deposit_message_id=None):
+async def send_admin_report(app, poll_id, report_message_id=None, ping_message_id=None):
     group = poll_to_group.get(poll_id)
     if not group:
         logging.warning(f"⚠️ Не найдена группа для poll_id={poll_id}")
@@ -199,7 +196,6 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             idx_pause = header.index("Пауза")
             idx_voted = header.index("Проголосовали сегодня")
             idx_group = header.index("тех группа")
-            idx_deposit = header.index("Депозит")
         except ValueError as e:
             logging.warning(f"❗ Не найдена колонка: {e}")
             return
@@ -222,7 +218,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         not_voted_one_time = []
         
         for row in rows:
-            if len(row) <= idx_group:
+            if len(row) < idx_group:
                 continue
             group_col = safe_get(row, idx_group)
             if group_col != group_name_code:
@@ -276,9 +272,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
 
         report_msg = None
         ping_msg = None
-        deposit_msg_obj = None
 
-        # ------------------------------------------------------------------------------------
         # Отправляем или обновляем отчёт
         if report_message_id:
             await app.bot.edit_message_text(
@@ -305,7 +299,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         # 2. Формируем упоминания
         mentions = []
         for row in rows:
-            if len(row) <= idx_group:
+            if len(row) < idx_group:
                 continue
             group_col = safe_get(row, idx_group)
             if group_col != group_name_code:
@@ -341,87 +335,16 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                 )
                 logging.info(f"📨 Отправлен новый пинг (msg_id={ping_msg.message_id})")
 
-
-        # 3. Депозиты / не оплачено
-        not_paid = []
-        deposits = []
-
-        for row in rows:
-            if len(row) < idx_group:
-                continue
-
-            group_col = safe_get(row, idx_group)
-            if group_col != group_name_code:
-                continue
-
-            name = safe_get(row, idx_name).strip()
-            deposit = safe_get(row, idx_deposit).strip()
-
-            if not deposit:
-                continue
-
-            text = deposit.lower().replace("ё", "е")
-
-            if "не оплач" in text or "неоплач" in text:
-                not_paid.append(f"• {name} — {deposit}")
-            else:
-                deposits.append(f"• {name} — {deposit}")
-
-        not_paid.sort()
-        deposits.sort()
-
-        logging.info(
-            f"💰 Депозиты для {group_name_code}: "
-            f"не оплачено={len(not_paid)}, депозиты={len(deposits)}"
-        )
-
-        deposit_parts = []
-
-        if not_paid:
-            deposit_parts.append("💰 *Не оплачено*")
-            deposit_parts.append("\n".join(not_paid))
-
-        if deposits:
-            if not_paid:
-                deposit_parts.append("")
-            deposit_parts.append("🧾 *Депозиты*")
-            deposit_parts.append("\n".join(deposits))
-
-        deposit_msg_obj = None
-
-        if deposit_parts:
-            deposit_msg = "\n".join(deposit_parts)
-        else:
-            deposit_msg = "💰 Депозитов и долгов не записано ✅"
-        
-        if deposit_message_id:
-            await app.bot.edit_message_text(
-                chat_id=ADMIN_ID,
-                message_id=deposit_message_id,
-                text=deposit_msg,
-                parse_mode="Markdown"
-            )
-            logging.info(f"♻️ Обновлено сообщение депозитов {deposit_message_id}")
-        else:
-            deposit_msg_obj = await app.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=deposit_msg,
-                parse_mode="Markdown"
-            )
-            logging.info(f"📨 Отправлено новое сообщение депозитов (msg_id={deposit_msg_obj.message_id})")
-       
-
         # Сохраняем ID сообщений, если они новые
         report_msg_id = report_msg.message_id if report_msg else report_message_id
         ping_msg_id = ping_msg.message_id if ping_msg else ping_message_id
-        deposit_msg_id = deposit_msg_obj.message_id if deposit_msg_obj else deposit_message_id
 
         # 4. Записываем связку в таблицу "Репорты"
         try:
             found = False
             resp = sheets_service.values().get(
                 spreadsheetId=SPREADSHEET_ID,
-                range="Репорты!A2:H"
+                range="Репорты!A2:G"
             ).execute()
             rows = resp.get("values", [])
         
@@ -431,13 +354,12 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             
                     safe_report_id = str(report_msg_id) if report_msg_id is not None else ""
                     safe_ping_id = str(ping_msg_id) if ping_msg_id is not None else ""
-                    safe_deposit_id = str(deposit_msg_id) if deposit_msg_id is not None else ""
             
                     sheets_service.values().update(
                         spreadsheetId=SPREADSHEET_ID,
-                        range=f"Репорты!C{i}:E{i}",
+                        range=f"Репорты!C{i}:D{i}",
                         valueInputOption="USER_ENTERED",
-                        body={"values": [[safe_report_id, safe_ping_id, safe_deposit_id]]}
+                        body={"values": [[safe_report_id, safe_ping_id]]}
                     ).execute()
             
                     logging.info(f"✏️ Обновлены message_id в строке {i}")
@@ -446,13 +368,11 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             if not found and report_msg:
                 safe_report_id = str(report_msg_id) if report_msg_id is not None else ""
                 safe_ping_id = str(ping_msg_id) if ping_msg_id is not None else ""
-                safe_deposit_id = str(deposit_msg_id) if deposit_msg_id is not None else ""
                 new_row = [[
                     str(poll_id).strip(),
                     group_name_code,
                     safe_report_id,
                     safe_ping_id,
-                    safe_deposit_id,
                     "", "", ""
                 ]]
                 sheets_service.values().append(
@@ -466,7 +386,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         except Exception as e:
             logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
     
-        return report_msg_id, ping_msg_id, deposit_msg_id
+        return report_msg_id, ping_msg_id
 
     except Exception as e:
         logging.warning(f"❗ Ошибка при отправке отчёта админу: {e}")
@@ -481,7 +401,7 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
         # 1️⃣ Берём строку с нужным poll_id из таблицы "Репорты"
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range="Репорты!A2:H"
+            range="Репорты!A2:G"
         ).execute()
         rows = resp.get("values", [])
         row = next((r for r in rows if r[0] == poll_id), None)
@@ -502,17 +422,15 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
         group_name = row[1]
         report_message_id = safe_int(row[2]) if len(row) > 2 else None
         ping_message_id = safe_int(row[3]) if len(row) > 3 else None
-        deposit_message_id = safe_int(row[4]) if len(row) > 4 else None
 
         poll_to_group[poll_id] = {"name": group_name}
 
         # 2️⃣ Обновляем отчёт и получаем актуальные ID
-        new_report_id, new_ping_id, new_deposit_id = await send_admin_report(
+        new_report_id, new_ping_id = await send_admin_report(
             app=context.application,
             poll_id=poll_id,
             report_message_id=report_message_id,
-            ping_message_id=ping_message_id,
-            deposit_message_id=deposit_message_id
+            ping_message_id=ping_message_id
         )
 
 
@@ -520,27 +438,23 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
         try:
             for i, r in enumerate(rows, start=2):  # начинаем с A2
                 if r[0] == poll_id:
-                    update_range = f"Репорты!C{i}:E{i}"
+                    update_range = f"Репорты!C{i}:D{i}"
 
                     safe_report_id = str(new_report_id) if new_report_id is not None else ""
                     safe_ping_id = str(new_ping_id) if new_ping_id is not None else ""
-                    safe_deposit_id = str(new_deposit_id) if new_deposit_id is not None else ""
                     
                     sheets_service.values().update(
                         spreadsheetId=SPREADSHEET_ID,
                         range=update_range,
                         valueInputOption="RAW",
-                        body={"values": [[safe_report_id, safe_ping_id, safe_deposit_id]]}
+                        body={"values": [[safe_report_id, safe_ping_id]]}
                     ).execute()
                     logging.info(f"✏️ Обновлены message_id в строке {i} для poll_id={poll_id}")
                     break
         except Exception as e:
             logging.warning(f"❗ Ошибка при обновлении связки в Репорты: {e}")
 
-        logging.info(
-            f"✅ Обновление отчёта завершено: "
-            f"report={new_report_id}, ping={new_ping_id}, deposit={new_deposit_id}"
-        )
+        logging.info(f"✅ Обновление отчёта завершено: new_report_id={new_report_id}, new_ping_id={new_ping_id}")
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в refresh_report_callback: {e}")
@@ -565,7 +479,7 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
 
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range="Репорты!A2:H"
+            range="Репорты!A2:G"
         ).execute()
         rows = resp.get("values", [])
 
@@ -576,8 +490,8 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
             return
 
         ping_message_id = safe_int(row[3]) if len(row) > 3 else None
-        group_chat_id = safe_int(row[5]) if len(row) > 5 else None
-        thread_id = safe_int(row[6]) if len(row) > 6 else None
+        group_chat_id = safe_int(row[4]) if len(row) > 4 else None
+        thread_id = safe_int(row[5]) if len(row) > 5 else None
 
         if not ping_message_id:
             await query.edit_message_text("❌ Не найден ping_message_id в таблице Репорты.")
@@ -593,7 +507,7 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
             "message_id": ping_message_id,
         }
 
-        if thread_id:
+        if row[5] if len(row) > 5 else "":
             copy_kwargs["message_thread_id"] = thread_id
 
         await context.bot.copy_message(**copy_kwargs)
