@@ -72,7 +72,6 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 poll_id=poll_id,
                 report_message_id=report_message_id,
                 ping_message_id=ping_message_id,
-                deposit_message_id=deposit_message_id
             )
             count += 1
 
