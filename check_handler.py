@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 import os
 import logging
 import datetime
+from utils import notify_karina_action
 
 from scheduler_handler import check_expired_subscriptions, groups
 from subscription_tools import (
