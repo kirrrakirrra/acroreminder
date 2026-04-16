@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from utils import format_now  # ⬅️ у тебя уже есть локализованное время
+from utils import format_now, notify_karina_action  # ⬅️ у тебя уже есть локализованное время
 from reminder_handler import send_admin_report, poll_to_group
 
 # Получаем переменные из окружения
@@ -27,6 +27,8 @@ def is_authorized(user_id: int) -> bool:
 # Команда /report
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    user = update.effective_user
+    await notify_karina_action(context, user, "📊 /report")
     full_name = update.effective_user.full_name
     username = update.effective_user.username or ""
     logging.info(f"/report used by {full_name} (@{username}) [ID: {user_id}]")
