@@ -280,3 +280,39 @@ def needs_attention(subscription: Dict[str, Any]) -> bool:
         return True
 
     return False
+
+
+def get_subscription_alert_status(subscription: dict) -> str:
+      """
+    Главный статус абонемента по приоритету:
+    expired > finished > last_lesson > warning_7 > none
+    """
+    sub_type = subscription.get("subscription_type")
+
+    # Для разовых вообще ничего
+    if sub_type == "drop_in":
+        return "none"
+
+    end_date = subscription.get("end_date")
+    if end_date:
+        from datetime import datetime
+        if end_date.date() < datetime.now().date():
+            return "expired"
+
+    if sub_type != "unlimited":
+        unused_raw = str(subscription.get("unused", "")).strip()
+        try:
+            unused = int(unused_raw)
+        except ValueError:
+            unused = None
+
+        if unused == 0:
+            return "finished"
+        if unused == 1:
+            return "last_lesson"
+
+    warning_7 = str(subscription.get("warning_7", "")).strip().lower() == "warning_7"
+    if warning_7:
+        return "warning_7"
+
+    return "none"
