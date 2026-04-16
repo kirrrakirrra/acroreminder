@@ -163,6 +163,14 @@ def build_subscription_message(subscription: dict) -> str:
     unlimited_info = get_unlimited_info(subscription)
     warning_7_text = get_warning_7_text(subscription)
     payment_reminder_text = get_payment_reminder_text(subscription)
+    status = get_subscription_alert_status(subscription)
+    logging.info(
+        f"[check-debug] name={subscription.get('name')}, "
+        f"end_date_raw={subscription.get('end_date_raw')}, "
+        f"end_date={subscription.get('end_date')}, "
+        f"unused={subscription.get('unused')}, "
+        f"status={status}"
+    )
 
     msg = (
         f"👤 *Имя:* `{name}`\n"
