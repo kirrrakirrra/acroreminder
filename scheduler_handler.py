@@ -2,8 +2,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
-from reminder_handler import poll_to_group
-from reminder_handler import schedule_report
+from reminder_handler import poll_to_group, send_admin_report
 from utils import now_local,format_now
 from datetime import datetime, timedelta
 from group_config import GROUPS, GROUP_NAME_MAP
@@ -23,6 +22,8 @@ CHECK_MIN_START = int(os.getenv("CHECK_MIN_1START", 1))
 CHECK_MIN_END = int(os.getenv("CHECK_MIN_END", 5))
 EXPIRY_HOUR_DAY = int(os.getenv("EXPIRY_HOUR_DAY", 12))
 EXPIRY_HOUR_EVENING = int(os.getenv("EXPIRY_HOUR_EVENING", 19))
+REPORT_HOUR_DAY = int(os.getenv("REPORT_HOUR_DAY", 15))
+REPORT_HOUR_MORNING = int(os.getenv("REPORT_HOUR_MORNING", 8))
 
 # ------------------------------------------------------------------------------------
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -144,8 +145,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.info("✅ Запланированный отчет записан в таблицу Репорты")
             except Exception as e:
                 logging.warning(f"❗ Не удалось записать запланированный отчет: {e}")
-
-            context.application.create_task(schedule_report(context.application, group, poll_msg.poll.id))
         
         except Exception as e:
             logging.warning(f"❗ Не удалось отправить опрос: {e}")
@@ -371,12 +370,31 @@ def should_check_expiry_for_group(now, group: dict) -> bool:
         group.get("check_day_offset", 0)
     )
     return target_weekday in group["days"]
+
+def should_send_report_for_group(now, group: dict) -> bool:
+    weekday = now.strftime("%A")
+
+    if weekday not in group["days"]:
+        return False
+
+    if group.get("check_window") == "evening":
+        if now.hour != REPORT_HOUR_MORNING:
+            return False
+    else:
+        if now.hour != REPORT_HOUR_DAY:
+            return False
+
+    if not (CHECK_MIN_START <= now.minute <= CHECK_MIN_END):
+        return False
+
+    return True
     
 async def scheduler(app):
     
     await asyncio.sleep(30)  # даём Render время на перезапуск
     last_check_dates = {}
     last_expiry_check = {}
+    last_report_check = {}
 
     while True:
         try:
@@ -391,7 +409,7 @@ async def scheduler(app):
                 f"MIN={CHECK_MIN_START}–{CHECK_MIN_END}"
             )
 
-            # 🔁 Опрос администратора по группам
+            # 🔁 Опрос администратора по группам -------------------------------------------------
             for idx, group in enumerate(groups):
                 if should_ask_about_group(now, group):
                     last_run_date = last_check_dates.get(group["key"])
@@ -403,7 +421,7 @@ async def scheduler(app):
                     else:
                         logging.info(f"[scheduler] Уже спрашивали сегодня по группе {group['name']}")
 
-            # 📋 Проверка абонементов по группам
+            # 📋 Проверка абонементов по группам -------------------------------------------------
             expiry_groups_to_check = []
 
             for group in groups:
@@ -427,6 +445,66 @@ async def scheduler(app):
                     last_expiry_check[expiry_keys] = now.date()
                 else:
                     logging.info("[scheduler] Проверка абонементов для этого окна уже была сегодня")
+             
+            report_groups_to_check = []
+
+            for group in groups:
+                if should_send_report_for_group(now, group):
+                    report_groups_to_check.append(group)
+            
+            if report_groups_to_check:
+                report_keys = tuple(sorted(group["key"] for group in report_groups_to_check))
+                last_run = last_report_check.get(report_keys)
+            
+                if last_run != now.date():
+                    logging.info("[scheduler] Отправляем репорты по группам...")
+                    logging.info(f"[scheduler] Группы для репорта: {[g['name'] for g in report_groups_to_check]}")
+            
+                    resp = sheets_service.values().get(
+                        spreadsheetId=SPREADSHEET_ID,
+                        range="Репорты!A2:G"
+                    ).execute()
+                    rows = resp.get("values", [])
+            
+                    today_str = now.strftime("%Y-%m-%d")
+            
+                    for group in report_groups_to_check:
+                        group_name = group["name"]
+            
+                        row = next(
+                            (r for r in rows if len(r) >= 7 and r[1] == group_name and r[6].startswith(today_str)),
+                            None
+                        )
+            
+                        if not row:
+                            logging.info(f"[scheduler] Нет строки Репорты на сегодня для группы {group_name}")
+                            continue
+            
+                        def safe_int(value):
+                            text = str(value).strip() if value is not None else ""
+                            if not text or text.lower() == "none":
+                                return None
+                            try:
+                                return int(text)
+                            except ValueError:
+                                return None
+            
+                        poll_id = row[0]
+                        report_message_id = safe_int(row[2]) if len(row) > 2 else None
+                        ping_message_id = safe_int(row[3]) if len(row) > 3 else None
+            
+                        poll_to_group[poll_id] = {"name": group_name}
+            
+                        await send_admin_report(
+                            app=app,
+                            poll_id=poll_id,
+                            report_message_id=report_message_id,
+                            ping_message_id=ping_message_id
+                        )
+            
+                    last_report_check[report_keys] = now.date()
+                else:
+                    logging.info("[scheduler] Репорты для этого окна уже отправлялись сегодня")
 
             await asyncio.sleep(20)
 
