@@ -255,7 +255,7 @@ def format_usage(subscription: Dict[str, Any]) -> str:
     used = subscription.get("used", 0)
 
     if is_unlimited(subscription):
-        return f"{used} (безлимит)"
+        return str(used)
 
     limit_value = get_effective_limit(subscription)
     if limit_value is None:
