@@ -196,15 +196,8 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     logging.info(f"/check used by {full_name} (@{raw_username}) [ID: {user_id}]")
 
-    karina_id = os.getenv("KARINA_ID")
-    if karina_id:
-        try:
-            await context.bot.send_message(
-                chat_id=karina_id,
-                text=f"👀 Команду /check использовал: {full_name} (@{raw_username}) [ID: {user_id}]"
-            )
-        except Exception as e:
-            logging.warning(f"Не удалось отправить сообщение админу: {e}")
+    user = update.effective_user
+    await notify_karina_action(context, user, "🔍 /check")
 
     try:
         all_subscriptions = load_all_subscriptions()
@@ -251,6 +244,8 @@ import os
 
 async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    user = update.effective_user
+    await notify_karina_action(context, user, "⚠️ /expired")
     full_name = update.effective_user.full_name
     username = update.effective_user.username or ""
     logging.info(f"/expired used by {full_name} (@{username}) [ID: {user_id}]")
