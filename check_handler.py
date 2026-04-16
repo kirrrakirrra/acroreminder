@@ -4,13 +4,14 @@ import os
 import logging
 import datetime
 from utils import notify_karina_action
-
+from group_config import GROUP_NAME_MAP
 from scheduler_handler import check_expired_subscriptions, groups
 from subscription_tools import (
     load_all_subscriptions,
     find_user_subscriptions,
     format_usage,
     is_finished,
+    get_subscription_alert_status,
 )
 
 # -----------------------------
@@ -70,8 +71,15 @@ def get_limited_subscription_warning(subscription: dict) -> str:
     if subscription.get("subscription_type") == "unlimited":
         return ""
 
+    status = get_subscription_alert_status(subscription)
+    if status in {"expired", "finished"}:
+        return ""
+
     difference_value = str(subscription.get("difference", "")).strip()
     if not difference_value:
+        return ""
+
+    if status == "last_lesson":
         return ""
 
     unused = subscription.get("unused", 0)
@@ -103,50 +111,36 @@ def get_unlimited_info(subscription: dict) -> str:
     )
 
 def get_payment_reminder_text(subscription: dict) -> str:
-    if subscription.get("subscription_type") == "unlimited":
-        return ""
+    status = get_subscription_alert_status(subscription)
 
-    unused_raw = str(subscription.get("unused", "")).strip()
-    if unused_raw == "":
-        return ""
-
-    try:
-        unused = int(unused_raw)
-    except ValueError:
-        return ""
-
-    if unused == 1:
+    if status == "expired":
         return (
-            "\n\n📌 *Осталось последнее занятие*\n"
-            "Пожалуйста, внесите оплату за следующий абонемент, "
+            "\n\n🔚 *Срок действия абонемента истёк.*\n"
+            "Не забудьте оплатить следующий абонемент, "
             "чтобы сохранить место в группе."
         )
 
-    if unused == 0:
+    if status == "finished":
         return (
             "\n\n🔚 *Абонемент завершён.*\n"
             "Не забудьте оплатить следующий абонемент, "
             "чтобы сохранить место в группе."
         )
 
+    if status == "last_lesson":
+        return (
+            "\n\n📌 *Осталось последнее занятие*\n"
+            "Пожалуйста, внесите оплату за следующий абонемент, "
+            "чтобы сохранить место в группе."
+        )
+
     return ""
 
 def get_warning_7_text(subscription: dict) -> str:
-    if not has_7_days_warning(subscription):
+    status = get_subscription_alert_status(subscription)
+
+    if status != "warning_7":
         return ""
-
-    # Для лимитных: если осталось 1 или 0 занятий, warning_7 не показываем
-    if subscription.get("subscription_type") != "unlimited":
-        unused_raw = str(subscription.get("unused", "")).strip()
-
-        try:
-            unused = int(unused_raw)
-        except ValueError:
-            unused = None
-  
-        # 👉 если осталось 1 или 0 — НЕ показываем warning_7
-        if unused in (0, 1):
-            return ""
 
     end_date = subscription.get("end_date_raw", "—")
 
@@ -236,11 +230,6 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 # -----------------------------
 # /expired — пока оставляем как есть
 # -----------------------------
-
-from group_config import GROUP_NAME_MAP
-from scheduler_handler import check_expired_subscriptions, groups
-import datetime
-import os
 
 async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
