@@ -27,6 +27,9 @@ def is_authorized(user_id: int) -> bool:
 # Команда /report
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    full_name = update.effective_user.full_name
+    username = update.effective_user.username or ""
+    logging.info(f"/report used by {full_name} (@{username}) [ID: {user_id}]")
     if not is_authorized(user_id):
         await update.message.reply_text(
             "⛔ Эта команда доступна только администратору.\n"
