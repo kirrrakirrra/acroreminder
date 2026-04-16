@@ -39,12 +39,12 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Получаем строки из таблицы "Репорты"
         resp = sheets_service.values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range="Репорты!A2:H"
+            range="Репорты!A2:G"
         ).execute()
         rows = resp.get("values", [])
 
         # Фильтруем только сегодняшние
-        today_rows = [r for r in rows if len(r) >= 8 and r[7].startswith(today)]
+        today_rows = [r for r in rows if len(r) >= 7 and r[6].startswith(today)]
 
         if not today_rows:
             await update.message.reply_text("ℹ️ Нет репортов на сегодня в таблице Репорты.")
@@ -65,7 +65,6 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             group_name = row[1]
             report_message_id = safe_int(row[2]) if len(row) > 2 else None
             ping_message_id = safe_int(row[3]) if len(row) > 3 else None
-            deposit_message_id = safe_int(row[4]) if len(row) > 4 else None
 
             poll_to_group[poll_id] = {"name": group_name}
             await send_admin_report(
