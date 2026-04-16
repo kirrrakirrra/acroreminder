@@ -251,6 +251,9 @@ import os
 
 async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    full_name = update.effective_user.full_name
+    username = update.effective_user.username or ""
+    logging.info(f"/expired used by {full_name} (@{username}) [ID: {user_id}]")
     admin_id = os.getenv("ADMIN_ID")
 
     if str(user_id) != str(admin_id):
