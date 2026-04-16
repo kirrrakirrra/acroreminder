@@ -99,8 +99,7 @@ def get_unlimited_info(subscription: dict) -> str:
         return ""
 
     return (
-        f"\n\n📌 *До конца абонемента:* `{end_date}`\n"
-        f"⏳ *Осталось дней:* `{days_until_end}`"
+        f"\n⏳ *До конца абонемента осталось дней:* `{days_until_end}`"
     )
 
 def get_payment_reminder_text(subscription: dict) -> str:
