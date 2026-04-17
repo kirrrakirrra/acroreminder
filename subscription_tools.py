@@ -287,19 +287,19 @@ def get_subscription_alert_status(subscription: dict) -> str:
     Главный статус абонемента по приоритету:
     expired > finished > last_lesson > warning_7 > none
     """
-
     sub_type = subscription.get("subscription_type")
 
-    # Разовые — игнорируем
+    # Для разовых вообще ничего
     if sub_type == "drop_in":
         return "none"
 
-    # 1. Срок истёк — самый высокий приоритет
-    if is_expired(subscription):
+    # 1. Если в AG / Days until end уже посчитано, что срок истёк — это главный приоритет
+    days_until_end_raw = str(subscription.get("days_until_end", "")).strip().lower()
+    if days_until_end_raw == "expired":
         return "expired"
 
     # 2. Только для лимитных
-    if not is_unlimited(subscription):
+    if sub_type != "unlimited":
         unused_raw = str(subscription.get("unused", "")).strip()
         try:
             unused = int(unused_raw)
