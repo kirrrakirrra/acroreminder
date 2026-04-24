@@ -228,7 +228,7 @@ async def check_expired_subscriptions(app, today_group_names):
             status = get_subscription_alert_status(sub)
 
             if status == "expired":
-                parts.insert(0, "🔚 *Срок действия абонемента истёк*")
+                parts.insert(0, "📛 *Срок действия абонемента истёк*")
                 parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                 parts.append(
                     "\n💳 *Не забудьте оплатить следующий абонемент, "
@@ -237,7 +237,7 @@ async def check_expired_subscriptions(app, today_group_names):
                 should_send = True
 
             elif status == "finished":
-                parts.insert(0, "🔚 *Абонемент завершён*")
+                parts.insert(0, "❌ *Абонемент завершён*")
                 parts.append(f"☑️ *Использовано:* {used}")
                 parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                 parts.append(
@@ -247,7 +247,7 @@ async def check_expired_subscriptions(app, today_group_names):
                 should_send = True
 
             elif status == "last_lesson":
-                parts.insert(0, "📌 *В абонементе осталось 1 занятие*")
+                parts.insert(0, "❕ *В абонементе осталось 1 занятие*")
                 parts.append(f"☑️ *Использовано:* {used}")
                 parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                 parts.append(
