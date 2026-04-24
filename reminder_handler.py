@@ -196,6 +196,7 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             idx_pause = header.index("Пауза")
             idx_voted = header.index("Проголосовали сегодня")
             idx_group = header.index("тех группа")
+            idx_deposit = header.index("Депозит")
         except ValueError as e:
             logging.warning(f"❗ Не найдена колонка: {e}")
             return
@@ -233,7 +234,21 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             parent_info = f"👤 {parent_name}"
             if username:
                 parent_info += f" (@{username})"
-            child_info = f"🧒 {name}\n    {parent_info}"
+            
+            deposit_original = safe_get(row, idx_deposit).strip()
+            deposit_raw = deposit_original.lower()
+            
+            payment_status = ""
+            
+            if deposit_raw:
+                if "не оплач" in deposit_raw:
+                    payment_status = "⚠️ не оплачено"
+                else:
+                    payment_status = f"💰 {deposit_original.strip()}"
+            if payment_status:
+                child_info = f"🧒 {name} — {payment_status}\n    {parent_info}"
+            else:
+                child_info = f"🧒 {name}\n    {parent_info}"
         
             if "по абонементу" in voted:
                 voted_by_subscription.append(child_info)
