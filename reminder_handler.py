@@ -242,9 +242,14 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
             
             if deposit_raw:
                 if "не оплач" in deposit_raw:
-                    payment_status = "⚠️ не оплачено"
+                    extra = re.sub(r"(?i)не\s*оплач[а-я]*", "", deposit_original).strip()
+            
+                    if extra:
+                        payment_status = f"⚠️ не оплачено {extra}"
+                    else:
+                        payment_status = "⚠️ не оплачено"
                 else:
-                    payment_status = f"💰 {deposit_original.strip()}"
+                    payment_status = f"💰 {deposit_original}"
             if payment_status:
                 child_info = f"🧒 {name} — {payment_status}\n    {parent_info}"
             else:
