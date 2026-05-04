@@ -285,7 +285,7 @@ def needs_attention(subscription: Dict[str, Any]) -> bool:
 def get_subscription_alert_status(subscription: dict) -> str:
     """
     Главный статус абонемента по приоритету:
-    expired > finished > last_lesson > warning_7 > none
+    finished > expired > last_lesson > warning_7 > none
     """
     sub_type = subscription.get("subscription_type")
 
@@ -293,12 +293,9 @@ def get_subscription_alert_status(subscription: dict) -> str:
     if sub_type == "drop_in":
         return "none"
 
-    # 1. Если в AG / Days until end уже посчитано, что срок истёк — это главный приоритет
-    days_until_end_raw = str(subscription.get("days_until_end", "")).strip().lower()
-    if days_until_end_raw == "expired":
-        return "expired"
+    unused = None
 
-    # 2. Только для лимитных
+    # 1. Сначала проверяем finished (ТОЛЬКО для лимитных)
     if sub_type != "unlimited":
         unused_raw = str(subscription.get("unused", "")).strip()
         try:
@@ -309,10 +306,17 @@ def get_subscription_alert_status(subscription: dict) -> str:
         if unused == 0:
             return "finished"
 
+    # 2. Потом expired
+    days_until_end_raw = str(subscription.get("days_until_end", "")).strip().lower()
+    if days_until_end_raw == "expired":
+        return "expired"
+
+    # 3. Потом last_lesson
+    if sub_type != "unlimited":
         if unused == 1:
             return "last_lesson"
 
-    # 3. warning_7
+    # 4. warning_7
     warning_value = str(subscription.get("warning_7", "")).strip().lower()
     if warning_value == "warning_7":
         return "warning_7"
