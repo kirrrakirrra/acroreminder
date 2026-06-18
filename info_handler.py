@@ -12,7 +12,7 @@ def get_info_keyboard():
         [InlineKeyboardButton("📍 Как найти зал", callback_data="info|location")],
         [InlineKeyboardButton("🧦 Подготовка к занятиям", callback_data="info|rules")],
         [InlineKeyboardButton("🎯 Индивидуальные тренировки", callback_data="info|personal")],
-        [InlineKeyboardButton("🤸🏻‍♂️ Про тренеров", callback_data="info|coaches")],
+        [InlineKeyboardButton("🤸🏻‍♂️ Про тренера", callback_data="info|coaches")],
     ])
 
 def get_group_choice_keyboard():
@@ -179,14 +179,14 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• 1.5 часа — 500.000₫"
         ),
         "coaches": (
-            "🤸🏼 *О тренерах:*\n\n"
-            "🤸🏻‍♂️ *Главный тренер: Фанис*\n"
+            # "🤸🏼 *О тренерах:*\n\n"
+            "🤸🏻‍♂️ *Tренер Фанис*\n"
             "• Контакт: [@FaniRaf](https://t.me/FaniRaf)\n"
             "• Кандидат в мастера спорта по акробатике\n"
             "• Тренирует детей в Нячанге с 2022 года\n\n"
-            "🤸🏻‍♀️ *Второй тренер: Полина*\n"
-            "• Контакт: [@Polina_NhaTrang_stretching](https://t.me/Polina_NhaTrang_stretching)\n"
-            "• Кандидат в мастера спорта по спортивной гимнастике"
+            # "🤸🏻‍♀️ *Второй тренер: Полина*\n"
+            # "• Контакт: [@Polina_NhaTrang_stretching](https://t.me/Polina_NhaTrang_stretching)\n"
+            # "• Кандидат в мастера спорта по спортивной гимнастике"
         ),
         "group_4_5": (
             "👧 *Группы 4–5 лет*\n"
