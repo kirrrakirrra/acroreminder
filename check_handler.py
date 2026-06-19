@@ -96,20 +96,33 @@ def get_unlimited_info(subscription: dict) -> str:
     if subscription.get("subscription_type") != "unlimited":
         return ""
 
+    status = get_subscription_alert_status(subscription)
+
+    # Если абонемент уже истёк, не показываем "осталось дней: expired"
+    if status == "expired":
+        return ""
+
+    # На всякий случай, если статус когда-то расширится
+    if status == "finished":
+        return ""
+
     # если уже есть warning_7 — обычный блок не показываем
     if has_7_days_warning(subscription):
         return ""
 
-    end_date = subscription.get("end_date_raw", "—")
     days_until_end = str(subscription.get("days_until_end", "")).strip()
 
     if not days_until_end:
         return ""
 
+    # дополнительная защита от технических значений из таблицы
+    if days_until_end.lower() == "expired":
+        return ""
+
     return (
         f"\n⏳ *До конца абонемента осталось дней:* `{days_until_end}`"
     )
-
+    
 def get_payment_reminder_text(subscription: dict) -> str:
     status = get_subscription_alert_status(subscription)
 
