@@ -251,7 +251,7 @@ async def check_expired_subscriptions(app, today_group_names):
                 parts.append(f"☑️ *Использовано:* {used}")
                 parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                 parts.append(
-                    "\n"По расписанию больше нет занятий, которые входят в срок этого абонемента."
+                    "\nПо расписанию больше нет занятий, которые входят в срок этого абонемента."
                 )
                 parts.append(
                     "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
