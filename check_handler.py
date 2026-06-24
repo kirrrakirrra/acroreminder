@@ -20,7 +20,12 @@ from subscription_tools import (
 
 def has_7_days_warning(subscription: dict) -> bool:
     value = str(subscription.get("warning_7", "")).strip().lower()
-    return value == "warning_7"
+    return value in {
+        "warning_7",
+        "no_calendar_lessons",
+        "last_calendar_lesson_today",
+        "last_calendar_lesson",
+    }
 
 
 def build_visit_dates_text(subscription: dict) -> str:
@@ -72,14 +77,18 @@ def get_limited_subscription_warning(subscription: dict) -> str:
         return ""
 
     status = get_subscription_alert_status(subscription)
-    if status in {"expired", "finished"}:
+    if status in {
+        "expired",
+        "finished",
+        "last_lesson",
+        "no_calendar_lessons",
+        "last_calendar_lesson_today",
+        "last_calendar_lesson",
+    }:
         return ""
 
     difference_value = str(subscription.get("difference", "")).strip()
     if not difference_value:
-        return ""
-
-    if status == "last_lesson":
         return ""
 
     unused = subscription.get("unused", 0)
@@ -151,6 +160,25 @@ def get_payment_reminder_text(subscription: dict) -> str:
 
 def get_warning_7_text(subscription: dict) -> str:
     status = get_subscription_alert_status(subscription)
+
+    if status == "no_calendar_lessons":
+        return (
+            "\n\n⚠️ *По расписанию больше нет занятий, которые попадают в срок этого абонемента.*\n"
+            "Пожалуйста, внесите оплату за следующий абонемент, "
+            "чтобы сохранить место в группе."
+        )
+
+    if status == "last_calendar_lesson_today":
+        return (
+            "\n\n⚠️ *Сегодня последнее занятие, которое попадает в срок этого абонемента.*\n"
+            "Пожалуйста, внесите оплату за следующий абонемент."
+        )
+
+    if status == "last_calendar_lesson":
+        return (
+            "\n\n⚠️ *Осталось последнее занятие, которое попадает в срок этого абонемента.*\n"
+            "Пожалуйста, внесите оплату за следующий абонемент."
+        )
 
     if status != "warning_7":
         return ""
