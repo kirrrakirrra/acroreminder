@@ -251,8 +251,7 @@ async def check_expired_subscriptions(app, today_group_names):
                 parts.append(f"☑️ *Использовано:* {used}")
                 parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                 parts.append(
-                    "\nПо датам абонемент ещё может быть активен, "
-                    "но занятий, которые попадают в срок действия, больше нет."
+                    "\n"По расписанию больше нет занятий, которые входят в срок этого абонемента."
                 )
                 parts.append(
                     "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
@@ -261,11 +260,11 @@ async def check_expired_subscriptions(app, today_group_names):
                 should_send = True
             
             elif status == "last_calendar_lesson_today":
-                parts.insert(0, "📍🗓️ *Сегодня последнее занятие по сроку*")
+                parts.insert(0, "🚨 *Сегодня финальный день абонемента*")
                 parts.append(f"☑️ *Использовано:* {used}")
                 parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                 parts.append(
-                    "\nЭто последнее занятие, которое попадает в срок действия абонемента."
+                    "\nСегодня последнее занятие, которое попадает в срок действия абонемента."
                 )
                 parts.append(
                     "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
@@ -274,7 +273,7 @@ async def check_expired_subscriptions(app, today_group_names):
                 should_send = True
             
             elif status == "last_calendar_lesson":
-                parts.insert(0, "❕🗓️ *Осталось последнее занятие по сроку*")
+                parts.insert(0, "❕🗓️ *Осталось одно занятие в рамках абонемента*")
                 parts.append(f"☑️ *Использовано:* {used}")
                 parts.append(f"📅 *Даты посещений:*\n{dates_text}")
                 parts.append(
