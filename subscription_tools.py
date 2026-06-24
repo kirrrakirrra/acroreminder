@@ -285,7 +285,7 @@ def needs_attention(subscription: Dict[str, Any]) -> bool:
 def get_subscription_alert_status(subscription: dict) -> str:
     """
     Главный статус абонемента по приоритету:
-    finished > expired > last_lesson > warning_7 > none
+    finished > expired > calendar warnings > last_lesson > warning_7 > none
     """
     sub_type = subscription.get("subscription_type")
 
@@ -311,13 +311,22 @@ def get_subscription_alert_status(subscription: dict) -> str:
     if days_until_end_raw == "expired":
         return "expired"
 
-    # 3. Потом last_lesson
+    # 3. Потом календарные предупреждения из warning_7
+    warning_value = str(subscription.get("warning_7", "")).strip().lower()
+
+    if warning_value in {
+        "no_calendar_lessons",
+        "last_calendar_lesson_today",
+        "last_calendar_lesson",
+    }:
+        return warning_value
+
+    # 4. Потом last_lesson по лимиту
     if sub_type != "unlimited":
         if unused == 1:
             return "last_lesson"
 
-    # 4. warning_7
-    warning_value = str(subscription.get("warning_7", "")).strip().lower()
+    # 5. Потом обычный warning_7
     if warning_value == "warning_7":
         return "warning_7"
 
