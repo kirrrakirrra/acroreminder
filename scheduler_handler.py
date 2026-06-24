@@ -246,6 +246,46 @@ async def check_expired_subscriptions(app, today_group_names):
                 )
                 should_send = True
 
+            elif status == "no_calendar_lessons":
+                parts.insert(0, "⛔️ *Абонемент завершён по расписанию*")
+                parts.append(f"☑️ *Использовано:* {used}")
+                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
+                parts.append(
+                    "\nПо датам абонемент ещё может быть активен, "
+                    "но занятий, которые попадают в срок действия, больше нет."
+                )
+                parts.append(
+                    "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
+                    "чтобы сохранить место в группе.*"
+                )
+                should_send = True
+            
+            elif status == "last_calendar_lesson_today":
+                parts.insert(0, "📍🗓️ *Сегодня последнее занятие по сроку*")
+                parts.append(f"☑️ *Использовано:* {used}")
+                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
+                parts.append(
+                    "\nЭто последнее занятие, которое попадает в срок действия абонемента."
+                )
+                parts.append(
+                    "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
+                    "чтобы сохранить место в группе.*"
+                )
+                should_send = True
+            
+            elif status == "last_calendar_lesson":
+                parts.insert(0, "❕🗓️ *Осталось последнее занятие по сроку*")
+                parts.append(f"☑️ *Использовано:* {used}")
+                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
+                parts.append(
+                    "\nВ срок действия абонемента попадает ещё только одно занятие."
+                )
+                parts.append(
+                    "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
+                    "чтобы сохранить место в группе.*"
+                )
+                should_send = True
+
             elif status == "last_lesson":
                 parts.insert(0, "❕ *В абонементе осталось 1 занятие*")
                 parts.append(f"☑️ *Использовано:* {used}")
