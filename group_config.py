@@ -60,7 +60,7 @@ GROUPS = [
         "sheet_group": "Взрослая группа",
         "display_name": "Взрослой группы",
         "days": ["Tuesday", "Thursday"],
-        "time": "10:00",
+        "time": "11:00",
         "thread_id": None,
         #"thread_id": 105,
         "group_id": os.getenv("GROUP_ID_ADULT"),
