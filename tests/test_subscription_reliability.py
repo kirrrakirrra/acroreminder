@@ -114,6 +114,19 @@ def test_blank_and_drop_in_are_excluded_from_check(monkeypatch):
     assert "нет активных абонементов" in context.bot.send_message.call_args.kwargs["text"]
 
 
+def test_known_group_with_successful_empty_load_gets_no_subscription_message(monkeypatch):
+    handler = import_check_handler(monkeypatch)
+    loader = Mock(return_value=[])
+    monkeypatch.setattr(handler, "load_all_subscriptions", loader)
+    monkeypatch.setattr(handler, "notify_karina_action", AsyncMock())
+
+    context = run_check(handler, make_update(-100, "supergroup"))
+
+    assert loader.call_args.args == (["Взрослая группа"],)
+    assert "нет активных абонементов" in context.bot.send_message.call_args.kwargs["text"]
+    assert "Таблица пуста" not in context.bot.send_message.call_args.kwargs["text"]
+
+
 def test_alert_status_excludes_blank_and_drop_in_and_preserves_real_types():
     status = subscription_tools.get_subscription_alert_status
     assert status({"subscription_type": "", "unused": 0}) == "none"
@@ -136,11 +149,33 @@ def test_loader_uses_one_batch_get_and_skips_blank_subscription_rows(monkeypatch
     execute = Mock(return_value=response)
     batch_get = Mock(return_value=SimpleNamespace(execute=execute))
     service = SimpleNamespace(values=lambda: SimpleNamespace(batchGet=batch_get))
-    monkeypatch.setattr(subscription_tools, "sheets_service", service)
+    factory = Mock(return_value=service)
+    monkeypatch.setattr(subscription_tools, "create_subscription_sheets_service", factory)
 
     result = subscription_tools.load_all_subscriptions(["Группы 4-5", "Группы 6-9"])
 
     assert [item["name"] for item in result] == ["Real"]
+    factory.assert_called_once_with()
     batch_get.assert_called_once()
     assert len(batch_get.call_args.kwargs["ranges"]) == 2
     execute.assert_called_once()
+
+
+def test_each_loader_invocation_creates_its_own_sheets_service(monkeypatch):
+    execute_one = Mock(return_value={"valueRanges": []})
+    execute_two = Mock(return_value={"valueRanges": []})
+    service_one = SimpleNamespace(values=lambda: SimpleNamespace(
+        batchGet=Mock(return_value=SimpleNamespace(execute=execute_one))
+    ))
+    service_two = SimpleNamespace(values=lambda: SimpleNamespace(
+        batchGet=Mock(return_value=SimpleNamespace(execute=execute_two))
+    ))
+    factory = Mock(side_effect=[service_one, service_two])
+    monkeypatch.setattr(subscription_tools, "create_subscription_sheets_service", factory)
+
+    subscription_tools.load_all_subscriptions(["Группы 4-5"])
+    subscription_tools.load_all_subscriptions(["Группы 4-5"])
+
+    assert factory.call_count == 2
+    execute_one.assert_called_once_with()
+    execute_two.assert_called_once_with()

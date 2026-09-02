@@ -316,15 +316,6 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
             chat_id, thread_id, lookup_scope, time.monotonic() - load_started,
         )
 
-    if not all_subscriptions:
-        logging.info(
-            "/check matches chat_id=%s message_thread_id=%s count=0",
-            chat_id, thread_id,
-        )
-        sent = await send_user_message("Таблица пуста или недоступна.")
-        await notify_after_send(sent)
-        return
-
     user_subscriptions = find_user_subscriptions(
         all_subscriptions=all_subscriptions,
         telegram_user_id=user_id,

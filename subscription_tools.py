@@ -23,7 +23,11 @@ DATA_RANGE = "A2:AH32"  # 2 строка = заголовки, 3-32 = данны
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
 )
-sheets_service = build("sheets", "v4", credentials=creds).spreadsheets()
+
+
+def create_subscription_sheets_service():
+    """Create a Sheets resource with a transport owned by the current load call."""
+    return build("sheets", "v4", credentials=creds).spreadsheets()
 
 
 def safe_get(row: List[str], idx: int, default: str = "") -> str:
@@ -102,6 +106,9 @@ def load_all_subscriptions(
     if not requested_sheets:
         return all_subscriptions
 
+    # googleapiclient's httplib2 transport is not thread-safe.  Each invocation
+    # can run in a different asyncio worker thread, so it must own its service.
+    sheets_service = create_subscription_sheets_service()
     ranges = [f"'{sheet_name}'!{DATA_RANGE}" for sheet_name in requested_sheets]
     resp = sheets_service.values().batchGet(
         spreadsheetId=SPREADSHEET_ID,
