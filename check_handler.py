@@ -1,10 +1,12 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 import os
+import asyncio
 import logging
 import datetime
+import time
 from utils import notify_karina_action
-from group_config import GROUP_NAME_MAP
+from group_config import GROUP_NAME_MAP, GROUPS
 from scheduler_handler import check_expired_subscriptions, groups
 from subscription_tools import (
     load_all_subscriptions,
@@ -12,6 +14,7 @@ from subscription_tools import (
     format_usage,
     is_finished,
     get_subscription_alert_status,
+    SUBSCRIPTION_SHEETS,
 )
 
 # -----------------------------
@@ -235,6 +238,27 @@ def build_subscription_message(subscription: dict) -> str:
 # /check
 # -----------------------------
 
+GROUP_SHEET_BY_KEY = {
+    "junior_1715": "Группы 4-5",
+    "junior_1830": "Группы 4-5",
+    "69_beginner": "Группы 6-9",
+    "69_pro": "Группы 6-9",
+    "adult": "Взрослая группа",
+}
+
+
+def get_subscription_sheets_for_chat(chat) -> list[str]:
+    """Restrict known group chats; private and unknown chats search every sheet."""
+    if not chat or getattr(chat, "type", None) not in {"group", "supergroup"}:
+        return list(SUBSCRIPTION_SHEETS)
+
+    chat_id = str(chat.id)
+    for group in GROUPS:
+        if group.get("group_id") and str(group["group_id"]) == chat_id:
+            return [GROUP_SHEET_BY_KEY[group["key"]]]
+    return list(SUBSCRIPTION_SHEETS)
+
+
 async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_username = update.effective_user.username
     user_id = update.effective_user.id
@@ -243,16 +267,54 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
     logging.info(f"/check used by {full_name} (@{raw_username}) [ID: {user_id}]")
 
     user = update.effective_user
-    await notify_karina_action(context, user, "🔍 /check")
+    chat = update.effective_chat
+    effective_message = update.effective_message
+    chat_id = chat.id
+    thread_id = getattr(effective_message, "message_thread_id", None)
+    sheet_names = get_subscription_sheets_for_chat(chat)
+    lookup_scope = sheet_names[0] if len(sheet_names) == 1 else "all"
+    logging.info(
+        "/check lookup chat_id=%s message_thread_id=%s sheets=%s",
+        chat_id, thread_id, lookup_scope,
+    )
 
+    async def send_user_message(text: str, **kwargs) -> bool:
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                message_thread_id=thread_id,
+                text=text,
+                **kwargs,
+            )
+            logging.info(
+                "/check user send succeeded chat_id=%s message_thread_id=%s",
+                chat_id, thread_id,
+            )
+            return True
+        except Exception:
+            logging.exception(
+                "/check user send failed chat_id=%s message_thread_id=%s",
+                chat_id, thread_id,
+            )
+            return False
+
+    async def notify_after_send(sent: bool) -> None:
+        if sent:
+            await notify_karina_action(context, user, "🔍 /check")
+
+    load_started = time.monotonic()
     try:
-        all_subscriptions = load_all_subscriptions()
+        all_subscriptions = await asyncio.to_thread(load_all_subscriptions, sheet_names)
     except Exception as e:
         logging.warning(f"❗ Ошибка при загрузке абонементов: {e}")
-        return await update.message.reply_text("❌ Не удалось прочитать данные абонементов из таблицы.")
-
-    if not all_subscriptions:
-        return await update.message.reply_text("Таблица пуста или недоступна.")
+        sent = await send_user_message("❌ Не удалось прочитать данные абонементов из таблицы.")
+        await notify_after_send(sent)
+        return
+    finally:
+        logging.info(
+            "/check Sheets load chat_id=%s message_thread_id=%s sheets=%s duration=%.3fs",
+            chat_id, thread_id, lookup_scope, time.monotonic() - load_started,
+        )
 
     user_subscriptions = find_user_subscriptions(
         all_subscriptions=all_subscriptions,
@@ -263,20 +325,28 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Убираем разовые — для /check они не считаются абонементами
     user_subscriptions = [
         sub for sub in user_subscriptions
-        if sub.get("subscription_type") != "drop_in"
+        if sub.get("subscription_type") not in {"", None, "drop_in"}
     ]
+    logging.info(
+        "/check matches chat_id=%s message_thread_id=%s count=%d",
+        chat_id, thread_id, len(user_subscriptions),
+    )
 
     if not user_subscriptions:
-        return await update.message.reply_text(
+        sent = await send_user_message(
             "⚠️ У вас нет активных абонементов, или ваш username / user ID не добавлен в таблицу, пожалуйста, обратитесь к администратору.\n\n"
             "ℹ️ Чтобы узнать *информацию* о расписании, ценах и правилах — воспользуйтесь командой /info.",
             parse_mode="Markdown"
         )
+        await notify_after_send(sent)
+        return
 
     messages = [build_subscription_message(sub) for sub in user_subscriptions]
 
+    all_sent = True
     for msg in messages:
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        all_sent = await send_user_message(msg, parse_mode="Markdown") and all_sent
+    await notify_after_send(all_sent)
 
 
 # -----------------------------

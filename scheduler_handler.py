@@ -166,7 +166,7 @@ async def check_expired_subscriptions(app, today_group_names):
     logging.info("🔍 check_expired_subscriptions запущена")
 
     try:
-        all_subscriptions = load_all_subscriptions()
+        all_subscriptions = await asyncio.to_thread(load_all_subscriptions)
 
         if not all_subscriptions:
             logging.warning("⛔️ Не удалось загрузить абонементы или список пуст.")
@@ -204,8 +204,13 @@ async def check_expired_subscriptions(app, today_group_names):
                 f"[expired-debug] name={name}, raw={sub_type_raw}, normalized={sub_type}, unused={unused_raw}, warning_7={warning_7}"
             )
 
-            # ❗ Разовые не включаем в отчёт по абонементам
-            if sub_type == "drop_in" or sub_type_raw.lower() == "разово":
+            # Blank rows and drop-ins are not subscription notifications.
+            if (
+                not str(sub_type_raw).strip()
+                or not sub_type
+                or sub_type == "drop_in"
+                or sub_type_raw.lower() == "разово"
+            ):
                 continue
 
             try:

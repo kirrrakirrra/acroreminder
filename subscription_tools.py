@@ -3,7 +3,7 @@
 import os
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -23,7 +23,11 @@ DATA_RANGE = "A2:AH32"  # 2 строка = заголовки, 3-32 = данны
 creds = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES
 )
-sheets_service = build("sheets", "v4", credentials=creds).spreadsheets()
+
+
+def create_subscription_sheets_service():
+    """Create a Sheets resource with a transport owned by the current load call."""
+    return build("sheets", "v4", credentials=creds).spreadsheets()
 
 
 def safe_get(row: List[str], idx: int, default: str = "") -> str:
@@ -88,19 +92,32 @@ def get_visit_dates(row: List[str], header_map: Dict[str, int]) -> List[str]:
     return visits
 
 
-def load_all_subscriptions() -> List[Dict[str, Any]]:
+def load_all_subscriptions(
+    sheet_names: Optional[Sequence[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Load subscriptions from the requested sheets with one Sheets API call."""
     all_subscriptions: List[Dict[str, Any]] = []
+    requested_sheets = list(sheet_names) if sheet_names is not None else SUBSCRIPTION_SHEETS
 
-    for sheet_name in SUBSCRIPTION_SHEETS:
-        try:
-            resp = sheets_service.values().get(
-                spreadsheetId=SPREADSHEET_ID,
-                range=f"{sheet_name}!{DATA_RANGE}"
-            ).execute()
-            rows = resp.get("values", [])
-        except Exception as e:
-            logging.warning(f"Не удалось прочитать вкладку {sheet_name}: {e}")
-            continue
+    unknown_sheets = set(requested_sheets) - set(SUBSCRIPTION_SHEETS)
+    if unknown_sheets:
+        raise ValueError(f"Unknown subscription sheets: {sorted(unknown_sheets)}")
+
+    if not requested_sheets:
+        return all_subscriptions
+
+    # googleapiclient's httplib2 transport is not thread-safe.  Each invocation
+    # can run in a different asyncio worker thread, so it must own its service.
+    sheets_service = create_subscription_sheets_service()
+    ranges = [f"'{sheet_name}'!{DATA_RANGE}" for sheet_name in requested_sheets]
+    resp = sheets_service.values().batchGet(
+        spreadsheetId=SPREADSHEET_ID,
+        ranges=ranges,
+    ).execute()
+    value_ranges = resp.get("valueRanges", [])
+
+    for index, sheet_name in enumerate(requested_sheets):
+        rows = value_ranges[index].get("values", []) if index < len(value_ranges) else []
 
         if not rows:
             logging.info(f"Вкладка {sheet_name} пустая или недоступна")
@@ -136,6 +153,10 @@ def load_all_subscriptions() -> List[Dict[str, Any]]:
             raw_user_id = safe_get(row, header_map["User ID"])
             raw_username = safe_get(row, header_map["username"])
             raw_sub_type = safe_get(row, header_map["Абонемент"])
+
+            # A named person without an actual subscription is not a subscription row.
+            if not raw_sub_type:
+                continue
 
             user_ids = [x.strip() for x in raw_user_id.split(",") if x.strip()]
             usernames = [
@@ -289,8 +310,8 @@ def get_subscription_alert_status(subscription: dict) -> str:
     """
     sub_type = subscription.get("subscription_type")
 
-    # Для разовых вообще ничего
-    if sub_type == "drop_in":
+    # Blank rows and drop-ins are not subscriptions eligible for alerts.
+    if not sub_type or sub_type == "drop_in":
         return "none"
 
     unused = None
