@@ -6,7 +6,12 @@ from reminder_handler import poll_to_group, send_admin_report
 from utils import now_local,format_now
 from datetime import datetime, timedelta
 from group_config import GROUPS, GROUP_NAME_MAP
-from subscription_tools import load_all_subscriptions, get_subscription_alert_status
+from subscription_tools import (
+    load_all_subscriptions,
+    get_subscription_alert_status,
+    is_started_subscription,
+    parse_unpaid_payment,
+)
 import asyncio
 import os
 import logging
@@ -184,6 +189,8 @@ async def check_expired_subscriptions(app, today_group_names):
             return
 
         found = False
+        unpaid_subscriptions = []
+        checked_groups = {sub.get("group") for sub in subscriptions_today}
 
         for sub in subscriptions_today:
             name = sub.get("name", "—")
@@ -212,6 +219,10 @@ async def check_expired_subscriptions(app, today_group_names):
                 or sub_type_raw.lower() == "разово"
             ):
                 continue
+
+            unpaid_status = parse_unpaid_payment(sub.get("deposit"))
+            if unpaid_status and is_started_subscription(sub):
+                unpaid_subscriptions.append((name, group, unpaid_status))
 
             try:
                 unused = int(unused_raw) if unused_raw != "" else None
@@ -332,6 +343,26 @@ async def check_expired_subscriptions(app, today_group_names):
                 )
                 logging.info(f"📤 Отправлено сообщение по абонементу: {name} / {group}")
                 found = True
+
+        if unpaid_subscriptions:
+            show_group = len(checked_groups) > 1
+            unpaid_lines = []
+            for name, group, unpaid_status in unpaid_subscriptions:
+                group_context = f" ({group})" if show_group else ""
+                unpaid_lines.append(
+                    f"⚠️ {name}{group_context} — {unpaid_status}"
+                )
+
+            await app.bot.send_message(
+                chat_id=ADMIN_ID,
+                text="💳 *Неоплаченные абонементы*\n\n" + "\n".join(unpaid_lines),
+                parse_mode="Markdown",
+            )
+            logging.info(
+                "📤 Отправлен сводный список неоплаченных абонементов: %d",
+                len(unpaid_subscriptions),
+            )
+            found = True
 
         if not found:
             logging.info("✅ Нет завершённых или проблемных абонементов для отправки.")

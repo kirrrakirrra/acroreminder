@@ -14,6 +14,7 @@ from subscription_tools import (
     format_usage,
     is_finished,
     get_subscription_alert_status,
+    parse_unpaid_payment,
     SUBSCRIPTION_SHEETS,
 )
 
@@ -161,6 +162,13 @@ def get_payment_reminder_text(subscription: dict) -> str:
 
     return ""
 
+
+def get_unpaid_payment_text(subscription: dict) -> str:
+    unpaid_status = parse_unpaid_payment(subscription.get("deposit"))
+    if not unpaid_status:
+        return ""
+    return f"\n💳 *Оплата:* ⚠️ {unpaid_status}"
+
 def get_warning_7_text(subscription: dict) -> str:
     status = get_subscription_alert_status(subscription)
 
@@ -210,6 +218,7 @@ def build_subscription_message(subscription: dict) -> str:
     unlimited_info = get_unlimited_info(subscription)
     warning_7_text = get_warning_7_text(subscription)
     payment_reminder_text = get_payment_reminder_text(subscription)
+    unpaid_payment_text = get_unpaid_payment_text(subscription)
     status = get_subscription_alert_status(subscription)
     logging.info(
         f"[check-debug] name={subscription.get('name')}, "
@@ -228,6 +237,7 @@ def build_subscription_message(subscription: dict) -> str:
         f"📅 *Даты посещений:*\n{dates_text}"
         f"{limited_warning}"
         f"{unlimited_info}"
+        f"{unpaid_payment_text}"
         f"{warning_7_text}"
         f"{payment_reminder_text}"
     )
