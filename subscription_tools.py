@@ -42,7 +42,7 @@ def to_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def parse_date(value: str) -> Optional[datetime]:
+def parse_date(value: str, reference_date: Optional[datetime] = None) -> Optional[datetime]:
     if not value:
         return None
 
@@ -57,6 +57,25 @@ def parse_date(value: str) -> Optional[datetime]:
             return datetime.strptime(value.strip(), fmt)
         except ValueError:
             continue
+
+    # Sheet dates without a year are interpreted as the closest occurrence to
+    # today. Considering adjacent years keeps New Year dates on the right side
+    # of the December/January boundary instead of almost a year away.
+    try:
+        day, month = (int(part) for part in value.strip().split("/"))
+    except (TypeError, ValueError):
+        return None
+
+    reference_date = reference_date or datetime.now()
+    candidates = []
+    for year in range(reference_date.year - 1, reference_date.year + 2):
+        try:
+            candidates.append(datetime(year, month, day))
+        except ValueError:
+            continue
+
+    if candidates:
+        return min(candidates, key=lambda date: abs(date - reference_date))
     return None
 
 

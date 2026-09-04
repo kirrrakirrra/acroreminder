@@ -159,6 +159,23 @@ def test_unpaid_payment_parser_ignores_paid_and_empty_values():
     assert parse(None) is None
 
 
+def test_parse_date_supports_day_month_and_uses_nearest_year():
+    parse = subscription_tools.parse_date
+
+    assert parse("02/09", datetime(2026, 9, 4)) == datetime(2026, 9, 2)
+    assert parse("05/01", datetime(2026, 12, 28)) == datetime(2027, 1, 5)
+    assert parse("28/12", datetime(2027, 1, 5)) == datetime(2026, 12, 28)
+
+
+def test_parse_date_keeps_explicit_year_formats():
+    parse = subscription_tools.parse_date
+
+    assert parse("02.09.2026", datetime(2030, 1, 1)) == datetime(2026, 9, 2)
+    assert parse("02/09/26", datetime(2030, 1, 1)) == datetime(2026, 9, 2)
+    assert parse("02/09/2026", datetime(2030, 1, 1)) == datetime(2026, 9, 2)
+    assert parse("2026-09-02", datetime(2030, 1, 1)) == datetime(2026, 9, 2)
+
+
 def test_check_payment_warning_only_for_unpaid_and_keeps_detail(monkeypatch):
     handler = import_check_handler(monkeypatch)
 
@@ -240,6 +257,40 @@ def test_scheduler_aggregates_started_unpaid_subscriptions_independently(monkeyp
     assert "Коротченко Дима (Group A) — не оплачено" in text
     assert "Иванова Аня (Group B) — не оплачено 100" in text
     assert unpaid_call.kwargs["chat_id"] == 1
+
+
+def test_scheduler_uses_parsed_day_month_date_for_started_unpaid(monkeypatch):
+    handler = import_scheduler_handler(monkeypatch)
+    today = datetime.now()
+    started = scheduler_subscription("Started")
+    started.update({
+        "start_date_raw": (today - timedelta(days=1)).strftime("%d/%m"),
+        "start_date": subscription_tools.parse_date(
+            (today - timedelta(days=1)).strftime("%d/%m"), today
+        ),
+        "used": 0,
+        "visit_dates": [],
+    })
+    future = scheduler_subscription("Future")
+    future.update({
+        "start_date_raw": (today + timedelta(days=1)).strftime("%d/%m"),
+        "start_date": subscription_tools.parse_date(
+            (today + timedelta(days=1)).strftime("%d/%m"), today
+        ),
+        "used": 0,
+        "visit_dates": [],
+    })
+    monkeypatch.setattr(handler, "load_all_subscriptions", Mock(
+        return_value=[started, future]
+    ))
+    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+
+    asyncio.run(handler.check_expired_subscriptions(app, ["Group"]))
+
+    app.bot.send_message.assert_awaited_once()
+    text = app.bot.send_message.await_args.kwargs["text"]
+    assert "Started — не оплачено" in text
+    assert "Future" not in text
 
 
 def test_loader_uses_one_batch_get_and_skips_blank_subscription_rows(monkeypatch):
