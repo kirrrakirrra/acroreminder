@@ -2,6 +2,7 @@
 
 import os
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -41,7 +42,7 @@ def to_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def parse_date(value: str) -> Optional[datetime]:
+def parse_date(value: str, reference_date: Optional[datetime] = None) -> Optional[datetime]:
     if not value:
         return None
 
@@ -56,6 +57,25 @@ def parse_date(value: str) -> Optional[datetime]:
             return datetime.strptime(value.strip(), fmt)
         except ValueError:
             continue
+
+    # Sheet dates without a year are interpreted as the closest occurrence to
+    # today. Considering adjacent years keeps New Year dates on the right side
+    # of the December/January boundary instead of almost a year away.
+    try:
+        day, month = (int(part) for part in value.strip().split("/"))
+    except (TypeError, ValueError):
+        return None
+
+    reference_date = reference_date or datetime.now()
+    candidates = []
+    for year in range(reference_date.year - 1, reference_date.year + 2):
+        try:
+            candidates.append(datetime(year, month, day))
+        except ValueError:
+            continue
+
+    if candidates:
+        return min(candidates, key=lambda date: abs(date - reference_date))
     return None
 
 
@@ -70,6 +90,35 @@ def normalize_subscription_type(raw_type: str) -> str:
         "разово": "drop_in",
     }
     return mapping.get(value, value)
+
+
+UNPAID_PAYMENT_PATTERN = re.compile(r"не\s*оплач[а-яё]*", re.IGNORECASE)
+
+
+def parse_unpaid_payment(raw_value: Any) -> Optional[str]:
+    """Return a user-facing unpaid status, or ``None`` when it is not unpaid."""
+    value = str(raw_value or "").strip()
+    match = UNPAID_PAYMENT_PATTERN.search(value)
+    if not match:
+        return None
+
+    detail = value[match.end():].strip()
+    return f"не оплачено {detail}" if detail else "не оплачено"
+
+
+def is_started_subscription(
+    subscription: Dict[str, Any], today: Optional[datetime] = None
+) -> bool:
+    """Use sheet dates/usage to avoid debt alerts for passes not started yet."""
+    today = today or datetime.now()
+    start_date = subscription.get("start_date")
+
+    # A parsed future date is explicit evidence that this pass has not started.
+    if start_date:
+        return start_date.date() <= today.date()
+
+    # Older/incomplete rows may lack a parseable date, but actual usage proves start.
+    return subscription.get("used", 0) > 0 or bool(subscription.get("visit_dates"))
 
 
 def get_header_map(header: List[str]) -> Dict[str, int]:
