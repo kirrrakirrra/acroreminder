@@ -59,6 +59,11 @@ def vn(year, month, day, hour, minute=0):
     return pytz.timezone("Asia/Ho_Chi_Minh").localize(datetime(year, month, day, hour, minute))
 
 
+def freeze_before_lesson(monkeypatch, handler):
+    """Keep non-time-focused callback tests before the Tuesday 17:15 lesson."""
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 8, 12))
+
+
 def test_command_is_registered():
     source = Path("main.py").read_text()
     assert 'CommandHandler("send_reminder", send_reminder_command)' in source
@@ -98,6 +103,7 @@ def test_day_before_adult_and_started_lesson_filter(monkeypatch):
 
 def test_first_send_and_duplicate_warning(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     values = sheet_rows(handler, [])
     ctx = context()
     first = update(1, "select_reminder|0|2026-09-08")
@@ -119,6 +125,7 @@ def test_first_send_and_duplicate_warning(monkeypatch):
 
 def test_explicit_resend_replaces_canonical_poll(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     old = ["old", handler.groups[0]["name"], "", "", "-45", "4", "2026-09-08"]
     values = sheet_rows(handler, [old])
     ctx = context("replacement")
@@ -132,6 +139,7 @@ def test_explicit_resend_replaces_canonical_poll(monkeypatch):
 
 def test_stale_yes_is_protected_and_scheduler_skips_durable_occurrence(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     row = ["manual", handler.groups[0]["name"], "", "", "-45", "4", "2026-09-08"]
     sheet_rows(handler, [row])
     stale_ctx = context()
@@ -159,6 +167,7 @@ def test_legacy_yes_without_date_is_stale(monkeypatch):
 
 def test_announcement_failure_is_reported_without_poll(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     sheet_rows(handler, [])
     ctx = context()
     ctx.bot.send_message.side_effect = RuntimeError("telegram announcement failed")
@@ -174,6 +183,7 @@ def test_announcement_failure_is_reported_without_poll(monkeypatch):
 
 def test_poll_failure_reports_partial_delivery(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     sheet_rows(handler, [])
     ctx = context()
     ctx.bot.send_poll.side_effect = RuntimeError("telegram poll failed")
@@ -190,6 +200,7 @@ def test_poll_failure_reports_partial_delivery(monkeypatch):
 
 def test_report_persistence_failure_retries_without_resending_telegram(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     values = sheet_rows(handler, [])
     survey_request = Mock()
     survey_request.execute.return_value = {}
@@ -214,6 +225,7 @@ def test_report_persistence_failure_retries_without_resending_telegram(monkeypat
 
 def test_survey_persistence_retries_then_full_success_without_telegram_resend(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     values = sheet_rows(handler, [])
     failed = Mock()
     failed.execute.side_effect = RuntimeError("temporary survey failure")
@@ -237,6 +249,7 @@ def test_survey_persistence_retries_then_full_success_without_telegram_resend(mo
 
 def test_survey_persistence_exhaustion_still_saves_report_and_is_partial(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     values = sheet_rows(handler, [])
     failed = Mock()
     failed.execute.side_effect = RuntimeError("survey unavailable")
@@ -363,6 +376,7 @@ def test_adult_day_before_callback_is_rejected_after_lesson_start(monkeypatch):
 
 def test_malformed_lesson_date_is_rejected(monkeypatch):
     handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
     ctx = context()
     callback = update(1, "yes|0|not-a-date")
 
