@@ -212,6 +212,85 @@ def test_report_persistence_failure_retries_without_resending_telegram(monkeypat
     assert handler.occurrence_was_sent(handler.groups[0], "2026-09-08")
 
 
+def test_survey_persistence_retries_then_full_success_without_telegram_resend(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    values = sheet_rows(handler, [])
+    failed = Mock()
+    failed.execute.side_effect = RuntimeError("temporary survey failure")
+    succeeded = Mock()
+    succeeded.execute.return_value = {}
+    report = Mock()
+    report.execute.return_value = {}
+    survey_attempts = iter([failed, succeeded])
+    values.append.side_effect = lambda **kwargs: (
+        next(survey_attempts) if kwargs["range"] == "Опросы!A1" else report
+    )
+    ctx = context()
+    callback = update(1, "yes|0|2026-09-08")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    ctx.bot.send_message.assert_awaited_once()
+    ctx.bot.send_poll.assert_awaited_once()
+    assert callback.callback_query.edit_message_text.await_args.args[0] == "Напоминание и опрос отправлены ✅"
+
+
+def test_survey_persistence_exhaustion_still_saves_report_and_is_partial(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    values = sheet_rows(handler, [])
+    failed = Mock()
+    failed.execute.side_effect = RuntimeError("survey unavailable")
+    report = Mock()
+    report.execute.return_value = {}
+    values.append.side_effect = lambda **kwargs: (
+        failed if kwargs["range"] == "Опросы!A1" else report
+    )
+    ctx = context()
+    callback = update(1, "yes|0|2026-09-08")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    ctx.bot.send_message.assert_awaited_once()
+    ctx.bot.send_poll.assert_awaited_once()
+    assert failed.execute.call_count == 3
+    report.execute.assert_called_once()
+    message = callback.callback_query.edit_message_text.await_args.args[0]
+    assert "защиты от дублей сохранено" in message
+    assert "восстановления ответов опроса" in message
+    assert "отправлены ✅" not in message
+
+
+def test_restore_poll_mapping_uses_reports_only_as_fallback(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    reminder = sys.modules["reminder_handler"]
+    reminder.poll_to_group.clear()
+    values = reminder.sheets_service.values.return_value
+
+    def get_request(**kwargs):
+        request = Mock()
+        if kwargs["range"] == "Опросы!A2:G":
+            request.execute.return_value = {
+                "values": [["survey-poll", "Survey Group"]]
+            }
+        else:
+            request.execute.return_value = {
+                "values": [
+                    ["survey-poll", "Wrong Report Group", "", "", "", "", "2026-09-08"],
+                    ["old-report-poll", "Report Group", "", "", "", "", "2026-09-08"],
+                    ["current-report-poll", "Report Group", "", "", "", "", "2026-09-08"],
+                ]
+            }
+        return request
+
+    values.get.side_effect = get_request
+
+    reminder.restore_poll_to_group()
+
+    assert reminder.poll_to_group["survey-poll"]["name"] == "Survey Group"
+    assert "old-report-poll" not in reminder.poll_to_group
+    assert reminder.poll_to_group["current-report-poll"]["name"] == "Report Group"
+
+
 def test_legacy_duplicate_rows_choose_latest_for_reports(monkeypatch):
     handler = load_scheduler(monkeypatch)
     rows = [

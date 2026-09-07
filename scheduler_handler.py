@@ -183,15 +183,26 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
         )
 
     logging.info("✅ Опрос отправлен: %s/%s poll_id=%s", *occurrence, poll_msg.poll.id)
-    try:
-        options_text = "|".join(opt.text for opt in poll_msg.poll.options)
-        sheets_service.values().append(
-            spreadsheetId=SPREADSHEET_ID, range="Опросы!A1",
-            valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
-            body={"values": [[poll_msg.poll.id, group["name"], "", "", format_now(), "", options_text]]},
-        ).execute()
-    except Exception as e:
-        logging.warning("❗ Не удалось записать poll_id в Опросы: %s", e)
+    options_text = "|".join(opt.text for opt in poll_msg.poll.options)
+    survey_row = [[
+        poll_msg.poll.id, group["name"], "", "", format_now(), "", options_text,
+    ]]
+    survey_persisted = False
+    for attempt in range(1, 4):
+        try:
+            sheets_service.values().append(
+                spreadsheetId=SPREADSHEET_ID, range="Опросы!A1",
+                valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+                body={"values": survey_row},
+            ).execute()
+            survey_persisted = True
+            logging.info("✅ Опросы сохранены: %s/%s (попытка %d)", *occurrence, attempt)
+            break
+        except Exception as e:
+            logging.warning(
+                "❗ Ошибка сохранения Опросы %s/%s (попытка %d/3): %s",
+                *occurrence, attempt, e,
+            )
 
     context.bot_data[poll_msg.poll.id] = poll_msg.poll.options
     poll_to_group[poll_msg.poll.id] = group
@@ -240,6 +251,18 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
             "persistence_failed",
             "⚠️ Напоминание и опрос отправлены в Telegram, но сохранить состояние "
             "для отчёта и защиты от дублей не удалось. Не отправляйте их повторно.",
+        )
+
+    if not survey_persisted:
+        logging.error(
+            "❌ Частичная доставка: Telegram и Репорты сохранены, Опросы не сохранены: %s/%s",
+            *occurrence,
+        )
+        return DeliveryResult(
+            "survey_persistence_failed",
+            "⚠️ Напоминание и опрос отправлены в Telegram, состояние отчёта и защиты "
+            "от дублей сохранено, но данные для восстановления ответов опроса сохранить "
+            "не удалось. Не отправляйте сообщения повторно.",
         )
 
     logging.info("✅ Полная доставка завершена: %s/%s", *occurrence)
