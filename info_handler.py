@@ -103,7 +103,7 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "────── ✦ ──────\n"
             "[Телеграм чат Взрослой группы](https://t.me/+gfVKU9KWBAwwMDc6)\n\n"
             "🧔‍♂️ *Взрослая группа*\n"
-            "Вт / Чт — 10:00–11:00\n\n"
+            "Вт / Чт — 10:00–11:30\n\n"
             "────── ✦ ──────\n"
             "❗️*Обязательна предварительная запись*❗️"
         ),
