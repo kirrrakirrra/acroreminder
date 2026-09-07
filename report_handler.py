@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from utils import format_now, notify_karina_action  # ⬅️ у тебя уже есть локализованное время
-from reminder_handler import send_admin_report, poll_to_group
+from reminder_handler import canonical_report_rows, send_admin_report, poll_to_group
 
 # Получаем переменные из окружения
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
@@ -49,7 +49,9 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows = resp.get("values", [])
 
         # Фильтруем только сегодняшние
-        today_rows = [r for r in rows if len(r) >= 7 and r[6].startswith(today)]
+        # A replacement poll is the last row for an occurrence.  This also makes
+        # historical duplicate rows harmless.
+        today_rows = canonical_report_rows(rows, today)
 
         if not today_rows:
             await update.message.reply_text("ℹ️ Нет репортов на сегодня в таблице Репорты.")
