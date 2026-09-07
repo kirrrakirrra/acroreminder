@@ -8,6 +8,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
+from report_rows import canonical_report_rows
 
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
@@ -124,7 +125,28 @@ def restore_poll_to_group():
             if poll_id and group_name:
                 poll_to_group[poll_id] = {"name": group_name}
 
-        logging.info(f"♻️ Восстановлено {len(poll_to_group)} записей poll_to_group")
+        survey_poll_ids = set(poll_to_group)
+
+        # Репорты contain the same durable poll/group relationship. Prefer the
+        # richer Опросы history, and use only canonical report occurrences for
+        # poll IDs that were not available there.
+        reports_resp = sheets_service.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range="Репорты!A2:G"
+        ).execute()
+        report_rows = canonical_report_rows(reports_resp.get("values", []))
+        fallback_count = 0
+        for row in report_rows:
+            poll_id = str(row[0]).strip()
+            group_name = str(row[1]).strip()
+            if poll_id and group_name and poll_id not in survey_poll_ids:
+                poll_to_group[poll_id] = {"name": group_name}
+                fallback_count += 1
+
+        logging.info(
+            "♻️ Восстановлено %d записей poll_to_group (%d из Репорты)",
+            len(poll_to_group), fallback_count,
+        )
     except Exception as e:
         logging.warning(f"❗ Ошибка при восстановлении poll_to_group: {e}")
 

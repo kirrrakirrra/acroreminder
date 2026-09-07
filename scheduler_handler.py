@@ -3,9 +3,10 @@ from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group, send_admin_report
-from utils import now_local,format_now
+from utils import LOCAL_TZ, now_local,format_now
 from datetime import datetime, timedelta
 from group_config import GROUPS, GROUP_NAME_MAP
+from report_rows import canonical_report_rows
 from subscription_tools import (
     load_all_subscriptions,
     get_subscription_alert_status,
@@ -18,8 +19,10 @@ import logging
 
 # ------------------------------------------------------------------------------------
 groups = GROUPS
+in_process_sent_occurrences = set()
 
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
+KARINA_ID = int(os.getenv("KARINA_ID", ADMIN_ID))
 
 CHECK_HOUR_DAY = int(os.getenv("CHECK_HOUR_DAY", 11))
 CHECK_HOUR_EVENING = int(os.getenv("CHECK_HOUR_EVENING", 18))
@@ -43,33 +46,129 @@ sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
 # pending = {}
 
 # ------------------------------------------------------------------------------------
-def get_decision_keyboard(group_id):
+def get_decision_keyboard(group_id, lesson_date=None):
+    suffix = f"|{lesson_date}" if lesson_date else ""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Да", callback_data=f"yes|{group_id}")],
-        [InlineKeyboardButton("❌ Нет, я сам напишу в группу", callback_data=f"skip|{group_id}")],
+        [InlineKeyboardButton("✅ Да", callback_data=f"yes|{group_id}{suffix}")],
+        [InlineKeyboardButton("❌ Нет, я сам напишу в группу", callback_data=f"skip|{group_id}{suffix}")],
     ])
 
 
 # ------------------------------------------------------------------------------------
 
 async def ask_admin(app, group_id, group):
+    lesson_date = get_lesson_date(now_local(), group).isoformat()
+    if occurrence_was_sent(group, lesson_date):
+        logging.info("[scheduler] Напоминание уже отправлено: %s/%s", group["name"], lesson_date)
+        return False
     msg = await app.bot.send_message(
         chat_id=ADMIN_ID,
         text=f"Занятие для {group['display_name']} {group['lesson_day_text']} в {group['time']} по расписанию?",
-        reply_markup=get_decision_keyboard(group_id)
+        reply_markup=get_decision_keyboard(group_id, lesson_date)
     )
+    return True
    # pending[msg.message_id] = group
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    if update.effective_user.id not in (ADMIN_ID, KARINA_ID):
+        await query.edit_message_text("⛔ Эта команда доступна только администратору.")
+        return
     data = query.data.split("|")
     action = data[0]
+    if action == "cancel_reminder":
+        await query.edit_message_text("Отменено.")
+        return
     group_id = int(data[1])
     group = groups[group_id]
+    if action in ("yes", "select_reminder", "resend_reminder") and len(data) < 3:
+        await query.edit_message_text("Эта кнопка устарела. Используйте /send_reminder.")
+        return
+    lesson_date = data[2] if len(data) > 2 else None
 
-    if action == "yes":
-        # Сообщение-объявление
+    if action in ("yes", "select_reminder", "resend_reminder"):
+        occurrence_status = validate_callback_occurrence(now_local(), group, lesson_date)
+        if occurrence_status == "started":
+            await query.edit_message_text(
+                "Это занятие уже началось или прошло. "
+                "Используйте /send_reminder для актуальных занятий."
+            )
+            return
+        if occurrence_status != "valid":
+            await query.edit_message_text(
+                "Эта кнопка содержит некорректное занятие. Используйте /send_reminder."
+            )
+            return
+
+    if action in ("yes", "select_reminder") and occurrence_was_sent(group, lesson_date):
+        await query.edit_message_text(
+            "⚠️ Напоминание и опрос для этого занятия уже отправлены. "
+            "Повторная отправка создаст ещё одно сообщение и опрос.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔁 Отправить заново", callback_data=f"resend_reminder|{group_id}|{lesson_date}")],
+                [InlineKeyboardButton("Отмена", callback_data="cancel_reminder")],
+            ]),
+        )
+        return
+
+    if action in ("yes", "select_reminder", "resend_reminder"):
+        result = await send_reminder_and_poll(
+            context, group, lesson_date, replace=action == "resend_reminder"
+        )
+        await query.edit_message_text(result.admin_message)
+    elif action == "skip":
+        await query.edit_message_text("❌ Окей, ничего не публикуем.\nНапоминание: не забудьте сами сообщить группе о деталях отмены")
+
+
+def get_lesson_date(now, group):
+    return now.date() + timedelta(days=group.get("check_day_offset", 0))
+
+
+def validate_callback_occurrence(now, group, lesson_date):
+    """Validate a callback's explicit scheduled occurrence in Vietnam time."""
+    try:
+        parsed_date = datetime.strptime(lesson_date, "%Y-%m-%d").date()
+        if parsed_date.strftime("%A") not in group["days"]:
+            return "invalid"
+        hour, minute = map(int, group["time"].split(":"))
+        lesson_datetime = LOCAL_TZ.localize(datetime(
+            parsed_date.year, parsed_date.month, parsed_date.day, hour, minute
+        ))
+        if now.tzinfo is None:
+            now = LOCAL_TZ.localize(now)
+    except (TypeError, ValueError, KeyError):
+        return "invalid"
+    return "started" if lesson_datetime <= now else "valid"
+
+
+def _report_rows():
+    response = sheets_service.values().get(
+        spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
+    ).execute()
+    return response.get("values", [])
+
+
+def occurrence_was_sent(group, lesson_date):
+    occurrence = (group["name"], str(lesson_date))
+    if occurrence in in_process_sent_occurrences:
+        return True
+    return any(
+        len(row) >= 7 and row[1] == group["name"] and str(row[6])[:10] == str(lesson_date)
+        for row in _report_rows()
+    )
+
+
+class DeliveryResult:
+    def __init__(self, state, admin_message):
+        self.state = state
+        self.admin_message = admin_message
+
+
+async def send_reminder_and_poll(context, group, lesson_date, replace=False):
+    """The single delivery path used by scheduled and manual confirmations."""
+    occurrence = (group["name"], str(lesson_date))
+    try:
         if group.get("thread_id") is not None:
             await context.bot.send_message(
                 chat_id=group["group_id"],
@@ -81,90 +180,154 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=group["group_id"],
                 text=f"Доброго дня! Тренировка для {group['display_name']} по расписанию {group['lesson_day_text']} в {group['time']} 🤸🏻🤸🏻‍♀️"
             )
-    
-        # Опрос
+        logging.info("✅ Объявление отправлено: %s/%s", *occurrence)
+    except Exception as e:
+        logging.warning("❗ Не удалось отправить объявление %s/%s: %s", *occurrence, e)
+        return DeliveryResult("announcement_failed", "❌ Не удалось отправить напоминание. Опрос не отправлялся.")
+
+    try:
+        if group.get("thread_id") is not None:
+            poll_msg = await context.bot.send_poll(
+                chat_id=group["group_id"],
+                question="Кто будет сегодня на занятии?",
+                options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
+                is_anonymous=False,
+                allows_multiple_answers=False,
+                message_thread_id=group["thread_id"],
+            )
+        else:
+            poll_msg = await context.bot.send_poll(
+                chat_id=group["group_id"],
+                question="Кто будет завтра на тренировке?",
+                options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
+                is_anonymous=False,
+                allows_multiple_answers=False,
+            )
+
+    except Exception as e:
+        logging.warning("❗ Объявление отправлено, но опрос %s/%s не отправлен: %s", *occurrence, e)
+        in_process_sent_occurrences.add(occurrence)
+        return DeliveryResult(
+            "poll_failed",
+            "⚠️ Объявление отправлено, но опрос отправить не удалось. "
+            "Не повторяйте отправку вслепую: объявление уже появилось в группе.",
+        )
+
+    logging.info("✅ Опрос отправлен: %s/%s poll_id=%s", *occurrence, poll_msg.poll.id)
+    options_text = "|".join(opt.text for opt in poll_msg.poll.options)
+    survey_row = [[
+        poll_msg.poll.id, group["name"], "", "", format_now(), "", options_text,
+    ]]
+    survey_persisted = False
+    for attempt in range(1, 4):
         try:
-            if group.get("thread_id") is not None:
-                poll_msg = await context.bot.send_poll(
-                    chat_id=group["group_id"],
-                    question="Кто будет сегодня на занятии?",
-                    options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
-                    is_anonymous=False,
-                    allows_multiple_answers=False,
-                    message_thread_id=group["thread_id"],
-                )
-            else:
-                poll_msg = await context.bot.send_poll(
-                    chat_id=group["group_id"],
-                    question="Кто будет завтра на тренировке?",
-                    options=["✅ Будем по абонементу", "🤸🏻‍♀️ Будем разово", "❌ Пропускаем"],
-                    is_anonymous=False,
-                    allows_multiple_answers=False,
-                )
-
-             # Сохраняем poll_id и название группы в Google Sheets (вкладка "Опросы")
-            try:
-                options_text = "|".join([opt.text for opt in poll_msg.poll.options])
-                new_row = [[
-                    poll_msg.poll.id,
-                    group["name"],
-                    "", "", format_now(), "", options_text  # пустые ячейки под user_id, username, время и ответ
-                ]]
-                sheets_service.values().append(
-                    spreadsheetId=SPREADSHEET_ID,
-                    range="Опросы!A1",  # ⬅️ явное указание вкладки
-                    valueInputOption="USER_ENTERED",
-                    insertDataOption="INSERT_ROWS",
-                    body={"values": new_row}
-                ).execute()
-            except Exception as e:
-                logging.warning(f"❗ Не удалось записать poll_id: {e}")
-
-            context.bot_data[poll_msg.poll.id] = poll_msg.poll.options  
-            
-            # 1. Отправили опрос → запланировать отчет
-            poll_to_group[poll_msg.poll.id] = group
-            
-            # 2. Записать запланированный отчёт в таблицу "Репорты"
-            try:
-                report_date = now_local().date()
-                if group["name"] == "Взрослой группы":
-                    report_date = report_date + timedelta(days=1)
-                
-                new_row = [[
-                    poll_msg.poll.id,
-                    group["name"],
-                    "",  # report_message_id
-                    "",  # ping_message_id
-                    str(group["group_id"]),
-                    str(group["thread_id"]) if group.get("thread_id") is not None else "",
-                    report_date.strftime("%Y-%m-%d")
-                ]]
-                sheets_service.values().append(
-                    spreadsheetId=SPREADSHEET_ID,
-                    range="Репорты!A1",
-                    valueInputOption="USER_ENTERED",
-                    insertDataOption="INSERT_ROWS",
-                    body={"values": new_row}
-                ).execute()
-                logging.info("✅ Запланированный отчет записан в таблицу Репорты")
-            except Exception as e:
-                logging.warning(f"❗ Не удалось записать запланированный отчет: {e}")
-        
+            sheets_service.values().append(
+                spreadsheetId=SPREADSHEET_ID, range="Опросы!A1",
+                valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+                body={"values": survey_row},
+            ).execute()
+            survey_persisted = True
+            logging.info("✅ Опросы сохранены: %s/%s (попытка %d)", *occurrence, attempt)
+            break
         except Exception as e:
-            logging.warning(f"❗ Не удалось отправить опрос: {e}")
-        
-        finally:
-            # 🔧 Убираем кнопки В ЛЮБОМ СЛУЧАЕ
-            try:
-                logging.info("🧼 Убираем кнопки после ответа администратора")
-                await query.edit_message_text("Напоминание и опрос отправлены ✅")
-            except Exception as e:
-                logging.warning(f"⚠️ Не удалось изменить сообщение с кнопками: {e}")
-        # await query.edit_message_text("Напоминание и опрос отправлены ✅")
-    elif action == "skip":
-        await query.edit_message_text("❌ Окей, ничего не публикуем.\nНапоминание: не забудьте сами сообщить группе о деталях отмены")
-    pass
+            logging.warning(
+                "❗ Ошибка сохранения Опросы %s/%s (попытка %d/3): %s",
+                *occurrence, attempt, e,
+            )
+
+    context.bot_data[poll_msg.poll.id] = poll_msg.poll.options
+    poll_to_group[poll_msg.poll.id] = group
+    report_row = [[
+        poll_msg.poll.id, group["name"], "", "", str(group["group_id"]),
+        str(group["thread_id"]) if group.get("thread_id") is not None else "",
+        str(lesson_date),
+    ]]
+
+    persistence_error = None
+    for attempt in range(1, 4):
+        try:
+            rows = _report_rows()
+            matches = [
+                i for i, row in enumerate(rows, start=2)
+                if len(row) >= 7 and row[1] == group["name"]
+                and str(row[6])[:10] == str(lesson_date)
+            ]
+            if any(str(rows[i - 2][0]) == str(poll_msg.poll.id) for i in matches):
+                persistence_error = None
+                logging.info("✅ Репорты уже сохранены: %s/%s", *occurrence)
+                break
+            if replace and matches:
+                sheets_service.values().update(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=f"Репорты!A{matches[-1]}:G{matches[-1]}",
+                    valueInputOption="USER_ENTERED", body={"values": report_row},
+                ).execute()
+            else:
+                sheets_service.values().append(
+                    spreadsheetId=SPREADSHEET_ID, range="Репорты!A1",
+                    valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+                    body={"values": report_row},
+                ).execute()
+            persistence_error = None
+            logging.info("✅ Репорты сохранены: %s/%s (попытка %d)", *occurrence, attempt)
+            break
+        except Exception as e:
+            persistence_error = e
+            logging.warning("❗ Ошибка сохранения Репорты %s/%s (попытка %d/3): %s", *occurrence, attempt, e)
+
+    in_process_sent_occurrences.add(occurrence)
+    if persistence_error is not None:
+        logging.error("❌ Частичная доставка: Telegram отправлен, Репорты не сохранены: %s/%s", *occurrence)
+        return DeliveryResult(
+            "persistence_failed",
+            "⚠️ Напоминание и опрос отправлены в Telegram, но сохранить состояние "
+            "для отчёта и защиты от дублей не удалось. Не отправляйте их повторно.",
+        )
+
+    if not survey_persisted:
+        logging.error(
+            "❌ Частичная доставка: Telegram и Репорты сохранены, Опросы не сохранены: %s/%s",
+            *occurrence,
+        )
+        return DeliveryResult(
+            "survey_persistence_failed",
+            "⚠️ Напоминание и опрос отправлены в Telegram, состояние отчёта и защиты "
+            "от дублей сохранено, но данные для восстановления ответов опроса сохранить "
+            "не удалось. Не отправляйте сообщения повторно.",
+        )
+
+    logging.info("✅ Полная доставка завершена: %s/%s", *occurrence)
+    return DeliveryResult("success", "Напоминание и опрос отправлены ✅")
+
+
+def relevant_upcoming_groups(now):
+    result = []
+    for idx, group in enumerate(groups):
+        lesson_date = get_lesson_date(now, group)
+        if lesson_date.strftime("%A") not in group["days"]:
+            continue
+        hour, minute = map(int, group["time"].split(":"))
+        lesson_time = now.replace(year=lesson_date.year, month=lesson_date.month, day=lesson_date.day,
+                                  hour=hour, minute=minute, second=0, microsecond=0)
+        if lesson_time <= now:
+            continue
+        result.append((idx, group, lesson_date))
+    return result
+
+
+async def send_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in (ADMIN_ID, KARINA_ID):
+        await update.message.reply_text("⛔ Эта команда доступна только администратору.")
+        return
+    choices = relevant_upcoming_groups(now_local())
+    if not choices:
+        await update.message.reply_text("ℹ️ Сейчас нет доступных предстоящих напоминаний.")
+        return
+    keyboard = [[InlineKeyboardButton(
+        f"{group['display_name']} — {group['lesson_day_text']} в {group['time']}",
+        callback_data=f"select_reminder|{idx}|{lesson_date.isoformat()}"
+    )] for idx, group, lesson_date in choices]
+    await update.message.reply_text("Выберите занятие:", reply_markup=InlineKeyboardMarkup(keyboard))
 # -----------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------
 async def check_expired_subscriptions(app, today_group_names):
@@ -528,9 +691,8 @@ async def scheduler(app):
                         spreadsheetId=SPREADSHEET_ID,
                         range="Репорты!A2:G"
                     ).execute()
-                    rows = resp.get("values", [])
-            
                     today_str = now.strftime("%Y-%m-%d")
+                    rows = canonical_report_rows(resp.get("values", []), today_str)
             
                     for group in report_groups_to_check:
                         group_name = group["name"]
