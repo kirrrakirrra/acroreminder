@@ -291,6 +291,100 @@ def test_restore_poll_mapping_uses_reports_only_as_fallback(monkeypatch):
     assert reminder.poll_to_group["current-report-poll"]["name"] == "Report Group"
 
 
+def test_automatic_yes_before_lesson_start_is_allowed(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    sheet_rows(handler, [])
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 8, 17, 14))
+    ctx = context()
+
+    asyncio.run(handler.handle_callback(update(1, "yes|0|2026-09-08"), ctx))
+
+    ctx.bot.send_message.assert_awaited_once()
+    ctx.bot.send_poll.assert_awaited_once()
+
+
+def test_automatic_yes_after_lesson_start_is_rejected(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 8, 17, 15))
+    ctx = context()
+    callback = update(1, "yes|0|2026-09-08")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    ctx.bot.send_message.assert_not_awaited()
+    ctx.bot.send_poll.assert_not_awaited()
+    assert "уже началось" in callback.callback_query.edit_message_text.await_args.args[0]
+
+
+def test_manual_selection_after_lesson_start_is_rejected(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 8, 19))
+    ctx = context()
+
+    asyncio.run(handler.handle_callback(update(1, "select_reminder|0|2026-09-08"), ctx))
+
+    ctx.bot.send_message.assert_not_awaited()
+    ctx.bot.send_poll.assert_not_awaited()
+
+
+def test_resend_after_lesson_start_is_rejected(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 8, 19))
+    ctx = context()
+
+    asyncio.run(handler.handle_callback(update(1, "resend_reminder|0|2026-09-08"), ctx))
+
+    ctx.bot.send_message.assert_not_awaited()
+    ctx.bot.send_poll.assert_not_awaited()
+
+
+def test_adult_day_before_callback_remains_valid_until_lesson_start(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    sheet_rows(handler, [])
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 10, 9, 59))
+    ctx = context()
+
+    asyncio.run(handler.handle_callback(update(1, "yes|4|2026-09-10"), ctx))
+
+    ctx.bot.send_message.assert_awaited_once()
+    ctx.bot.send_poll.assert_awaited_once()
+
+
+def test_adult_day_before_callback_is_rejected_after_lesson_start(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 10, 10))
+    ctx = context()
+
+    asyncio.run(handler.handle_callback(update(1, "yes|4|2026-09-10"), ctx))
+
+    ctx.bot.send_message.assert_not_awaited()
+    ctx.bot.send_poll.assert_not_awaited()
+
+
+def test_malformed_lesson_date_is_rejected(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    ctx = context()
+    callback = update(1, "yes|0|not-a-date")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    ctx.bot.send_message.assert_not_awaited()
+    ctx.bot.send_poll.assert_not_awaited()
+    assert "некорректное занятие" in callback.callback_query.edit_message_text.await_args.args[0]
+
+
+def test_lesson_date_on_unconfigured_weekday_is_rejected(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    # The junior group is configured for Tuesday/Thursday, not Wednesday.
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 8, 12))
+    ctx = context()
+
+    asyncio.run(handler.handle_callback(update(1, "yes|0|2026-09-09"), ctx))
+
+    ctx.bot.send_message.assert_not_awaited()
+    ctx.bot.send_poll.assert_not_awaited()
+
+
 def test_legacy_duplicate_rows_choose_latest_for_reports(monkeypatch):
     handler = load_scheduler(monkeypatch)
     rows = [

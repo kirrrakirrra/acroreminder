@@ -3,7 +3,7 @@ from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group, send_admin_report
-from utils import now_local,format_now
+from utils import LOCAL_TZ, now_local,format_now
 from datetime import datetime, timedelta
 from group_config import GROUPS, GROUP_NAME_MAP
 from report_rows import canonical_report_rows
@@ -87,6 +87,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     lesson_date = data[2] if len(data) > 2 else None
 
+    if action in ("yes", "select_reminder", "resend_reminder"):
+        occurrence_status = validate_callback_occurrence(now_local(), group, lesson_date)
+        if occurrence_status == "started":
+            await query.edit_message_text(
+                "Это занятие уже началось или прошло. "
+                "Используйте /send_reminder для актуальных занятий."
+            )
+            return
+        if occurrence_status != "valid":
+            await query.edit_message_text(
+                "Эта кнопка содержит некорректное занятие. Используйте /send_reminder."
+            )
+            return
+
     if action in ("yes", "select_reminder") and occurrence_was_sent(group, lesson_date):
         await query.edit_message_text(
             "⚠️ Напоминание и опрос для этого занятия уже отправлены. "
@@ -109,6 +123,23 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def get_lesson_date(now, group):
     return now.date() + timedelta(days=group.get("check_day_offset", 0))
+
+
+def validate_callback_occurrence(now, group, lesson_date):
+    """Validate a callback's explicit scheduled occurrence in Vietnam time."""
+    try:
+        parsed_date = datetime.strptime(lesson_date, "%Y-%m-%d").date()
+        if parsed_date.strftime("%A") not in group["days"]:
+            return "invalid"
+        hour, minute = map(int, group["time"].split(":"))
+        lesson_datetime = LOCAL_TZ.localize(datetime(
+            parsed_date.year, parsed_date.month, parsed_date.day, hour, minute
+        ))
+        if now.tzinfo is None:
+            now = LOCAL_TZ.localize(now)
+    except (TypeError, ValueError, KeyError):
+        return "invalid"
+    return "started" if lesson_datetime <= now else "valid"
 
 
 def _report_rows():
