@@ -8,6 +8,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
+from report_rows import canonical_report_rows
 
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
@@ -25,19 +26,6 @@ def get_report_hour(group: dict) -> int:
 # Хранилище голосов в памяти (резервный вариант) и poll_id → group
 poll_votes = {}
 poll_to_group = {}
-
-
-def canonical_report_rows(rows, report_date=None):
-    """Return only the last Sheets row for each group/lesson date occurrence."""
-    canonical = {}
-    for row in rows:
-        if len(row) < 7:
-            continue
-        row_date = str(row[6])[:10]
-        if report_date is not None and row_date != report_date:
-            continue
-        canonical[(row[1], row_date)] = row
-    return list(canonical.values())
 
 DEFAULT_OPTIONS = [
     "✅ Будем по абонементу",

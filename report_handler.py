@@ -5,7 +5,8 @@ from telegram.ext import ContextTypes
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from utils import format_now, notify_karina_action  # ⬅️ у тебя уже есть локализованное время
-from reminder_handler import canonical_report_rows, send_admin_report, poll_to_group
+from reminder_handler import send_admin_report, poll_to_group
+from report_rows import canonical_report_rows
 
 # Получаем переменные из окружения
 ADMIN_ID = int(os.getenv("ADMIN_ID"))

@@ -106,6 +106,7 @@ def test_first_send_and_duplicate_warning(monkeypatch):
     assert ctx.bot.send_poll.await_count == 1
     report_appends = [c for c in values.append.call_args_list if c.kwargs.get("range") == "Репорты!A1"]
     assert len(report_appends) == 1
+    assert first.callback_query.edit_message_text.await_args.args[0] == "Напоминание и опрос отправлены ✅"
 
     sheet_rows(handler, [["old", handler.groups[0]["name"], "", "", "-45", "4", "2026-09-08"]])
     duplicate_ctx = context()
@@ -142,6 +143,73 @@ def test_stale_yes_is_protected_and_scheduler_skips_durable_occurrence(monkeypat
     app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
     assert asyncio.run(handler.ask_admin(app, 0, handler.groups[0])) is False
     app.bot.send_message.assert_not_awaited()
+
+
+def test_legacy_yes_without_date_is_stale(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    ctx = context()
+    legacy = update(1, "yes|0")
+
+    asyncio.run(handler.handle_callback(legacy, ctx))
+
+    ctx.bot.send_message.assert_not_awaited()
+    ctx.bot.send_poll.assert_not_awaited()
+    assert "кнопка устарела" in legacy.callback_query.edit_message_text.await_args.args[0]
+
+
+def test_announcement_failure_is_reported_without_poll(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    sheet_rows(handler, [])
+    ctx = context()
+    ctx.bot.send_message.side_effect = RuntimeError("telegram announcement failed")
+    callback = update(1, "yes|0|2026-09-08")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    ctx.bot.send_poll.assert_not_awaited()
+    message = callback.callback_query.edit_message_text.await_args.args[0]
+    assert "Не удалось отправить напоминание" in message
+    assert "отправлены ✅" not in message
+
+
+def test_poll_failure_reports_partial_delivery(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    sheet_rows(handler, [])
+    ctx = context()
+    ctx.bot.send_poll.side_effect = RuntimeError("telegram poll failed")
+    callback = update(1, "yes|0|2026-09-08")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    ctx.bot.send_message.assert_awaited_once()
+    message = callback.callback_query.edit_message_text.await_args.args[0]
+    assert "Объявление отправлено, но опрос" in message
+    assert "Не повторяйте" in message
+    assert handler.occurrence_was_sent(handler.groups[0], "2026-09-08")
+
+
+def test_report_persistence_failure_retries_without_resending_telegram(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    values = sheet_rows(handler, [])
+    survey_request = Mock()
+    survey_request.execute.return_value = {}
+    failed_request = Mock()
+    failed_request.execute.side_effect = RuntimeError("sheets unavailable")
+    values.append.side_effect = lambda **kwargs: (
+        survey_request if kwargs["range"] == "Опросы!A1" else failed_request
+    )
+    ctx = context()
+    callback = update(1, "yes|0|2026-09-08")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    ctx.bot.send_message.assert_awaited_once()
+    ctx.bot.send_poll.assert_awaited_once()
+    assert failed_request.execute.call_count == 3
+    message = callback.callback_query.edit_message_text.await_args.args[0]
+    assert "сохранить состояние" in message
+    assert "отправлены ✅" not in message
+    assert handler.occurrence_was_sent(handler.groups[0], "2026-09-08")
 
 
 def test_legacy_duplicate_rows_choose_latest_for_reports(monkeypatch):
