@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import html
+import re
 from typing import Dict, Iterable, List, Optional, Tuple
 from urllib.parse import quote
 
@@ -75,18 +76,20 @@ def _base36(number: int) -> str:
 def make_alert_payload(subscription: Dict, alert_type: str) -> str:
     sheet_code = _base36(SUBSCRIPTION_SHEETS.index(subscription["sheet_name"]))
     row_code = _base36(int(subscription["row_number"]))
-    payload = ".".join((PAYLOAD_PREFIX, sheet_code, row_code,
+    payload = "_".join((PAYLOAD_PREFIX, sheet_code, row_code,
                         ALERT_CODES[alert_type], subscription_fingerprint(subscription)))
-    if len(payload.encode("utf-8")) > 64:
-        raise ValueError("Telegram start payload is too long")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", payload):
+        raise ValueError("Telegram start payload is invalid")
     return payload
 
 
 def parse_alert_payload(payload: str) -> Optional[Tuple[str, int, str, str]]:
-    if len(payload.encode("utf-8")) > 64:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", payload):
         return None
     try:
-        prefix, sheet_code, row_code, alert_code, fingerprint = payload.split(".")
+        # The URL-safe fingerprint may itself contain underscores, so only the
+        # four structural separators are split.
+        prefix, sheet_code, row_code, alert_code, fingerprint = payload.split("_", 4)
         sheet_index = int(sheet_code, 36)
         row_number = int(row_code, 36)
         alert_type = CODE_ALERTS[alert_code]

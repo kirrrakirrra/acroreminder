@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
+import re
 from unittest.mock import patch
 
 with patch("google.oauth2.service_account.Credentials.from_service_account_file"), patch(
     "googleapiclient.discovery.build"
 ):
     from subscription_alerts import (
+        ALERT_CODES,
+        SUBSCRIPTION_SHEETS,
         build_trainer_alert_card,
         collect_alerts,
         make_alert_payload,
@@ -28,16 +31,21 @@ def subscription(name="Анна", row=3, group="Группа A"):
 
 def test_payload_is_compact_and_contains_no_student_data():
     item = subscription("Очень Секретное Имя")
+    for sheet_name in SUBSCRIPTION_SHEETS:
+        item["sheet_name"] = sheet_name
+        for alert_type in ALERT_CODES:
+            payload = make_alert_payload(item, alert_type)
+            assert len(payload.encode()) <= 64
+            assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", payload)
+            assert "Очень" not in payload
+            assert parse_alert_payload(payload) == (
+                sheet_name, 3, alert_type, subscription_fingerprint(item)
+            )
+    item["sheet_name"] = "Группы 4-5"
     payload = make_alert_payload(item, "last_lesson")
-
-    assert len(payload.encode()) <= 64
-    assert "Очень" not in payload
-    assert parse_alert_payload(payload) == (
-        "Группы 4-5", 3, "last_lesson", subscription_fingerprint(item)
-    )
-    malformed = payload.split(".")
+    malformed = payload.split("_")
     malformed[1] = "-1"
-    assert parse_alert_payload(".".join(malformed)) is None
+    assert parse_alert_payload("_".join(malformed)) is None
 
 
 def test_digest_groups_alerts_links_names_and_keeps_unpaid_independent():

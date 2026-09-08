@@ -81,13 +81,13 @@ def test_unauthorized_and_stale_links_do_not_expose_card(monkeypatch):
     )
 
 
-def test_malformed_alert_prefix_does_not_enter_alert_flow(monkeypatch):
+def test_old_or_malformed_alert_prefix_does_not_enter_alert_flow(monkeypatch):
     handler = import_handler(monkeypatch)
     save = AsyncMock()
     monkeypatch.setattr(handler, "save_user_if_new", save)
     request = update(1)
 
-    asyncio.run(handler.start_command(request, SimpleNamespace(args=["sa1garbage"])))
+    asyncio.run(handler.start_command(request, SimpleNamespace(args=["sa1.garbage"])))
 
     save.assert_awaited_once()
     assert request.message.reply_text.await_args.args[0].startswith("Привет!")
