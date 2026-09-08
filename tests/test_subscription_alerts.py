@@ -5,6 +5,7 @@ with patch("google.oauth2.service_account.Credentials.from_service_account_file"
     "googleapiclient.discovery.build"
 ):
     from subscription_alerts import (
+        build_trainer_alert_card,
         collect_alerts,
         make_alert_payload,
         parse_alert_payload,
@@ -34,6 +35,9 @@ def test_payload_is_compact_and_contains_no_student_data():
     assert parse_alert_payload(payload) == (
         "Группы 4-5", 3, "last_lesson", subscription_fingerprint(item)
     )
+    malformed = payload.split(".")
+    malformed[1] = "-1"
+    assert parse_alert_payload(".".join(malformed)) is None
 
 
 def test_digest_groups_alerts_links_names_and_keeps_unpaid_independent():
@@ -62,6 +66,29 @@ def test_digest_splits_only_at_limit_and_repeats_category_heading():
     assert len(split) > 1
     assert all(len(part) <= 350 for part in split)
     assert all("В абонементе осталось 1 занятие" in part for part in split)
+
+
+def test_pathological_digest_row_is_shortened_before_html_rendering():
+    item = subscription("A & B " * 1000)
+    item["group"] = "<Очень длинная группа>" * 500
+    parts = render_digest_parts(collect_alerts([item], [item["group"]]), "acro_bot")
+
+    assert len(parts) == 1
+    assert len(parts[0]) <= 4096
+    assert parts[0].count("<a href=") == parts[0].count("</a>") == 1
+    assert "&amp" not in parts[0].replace("&amp;", "")
+
+
+def test_primary_alert_card_also_shows_current_unpaid_context_once():
+    item = subscription()
+    item["deposit"] = "не оплачено 400"
+
+    primary = build_trainer_alert_card(item, "last_lesson")
+    unpaid = build_trainer_alert_card(item, "unpaid")
+
+    assert primary.count("💳 <b>Оплата:</b> ⚠️ не оплачено 400") == 1
+    assert "По лимиту абонемента осталось одно занятие" in primary
+    assert unpaid.count("💳 <b>Оплата:</b> ⚠️ не оплачено 400") == 1
 
 
 def test_moved_row_resolves_only_by_unique_fingerprint_and_reused_hint_is_safe():

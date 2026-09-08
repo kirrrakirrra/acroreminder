@@ -90,11 +90,12 @@ def parse_alert_payload(payload: str) -> Optional[Tuple[str, int, str, str]]:
         sheet_index = int(sheet_code, 36)
         row_number = int(row_code, 36)
         alert_type = CODE_ALERTS[alert_code]
-        sheet_name = SUBSCRIPTION_SHEETS[sheet_index]
     except (ValueError, KeyError, IndexError):
         return None
-    if prefix != PAYLOAD_PREFIX or row_number < 3 or len(fingerprint) != 10:
+    if (prefix != PAYLOAD_PREFIX or row_number < 3 or len(fingerprint) != 10
+            or not 0 <= sheet_index < len(SUBSCRIPTION_SHEETS)):
         return None
+    sheet_name = SUBSCRIPTION_SHEETS[sheet_index]
     return sheet_name, row_number, alert_type, fingerprint
 
 
@@ -142,13 +143,36 @@ def _context(subscription: Dict, alert_type: str) -> str:
     return f"до {end}" if end else "срок требует внимания"
 
 
-def _digest_row(subscription: Dict, alert_type: str, bot_username: str) -> str:
+def _digest_row(subscription: Dict, alert_type: str, bot_username: str,
+                max_length: Optional[int] = None) -> str:
     payload = make_alert_payload(subscription, alert_type)
     url = f"https://t.me/{quote(bot_username.lstrip('@'))}?start={payload}"
-    name = html.escape(str(subscription.get("name", "—")))
-    group = html.escape(str(subscription.get("group", "—")))
-    context = html.escape(_context(subscription, alert_type))
-    return f'• <a href="{html.escape(url, quote=True)}">{name}</a> · {group} · {context}'
+    values = [str(subscription.get("name", "—")),
+              str(subscription.get("group", "—")), _context(subscription, alert_type)]
+
+    def render(cap: Optional[int] = None) -> str:
+        visible = values if cap is None else [
+            value if len(value) <= cap else value[:max(0, cap - 1)] + "…"
+            for value in values
+        ]
+        name, group, context = (html.escape(value) for value in visible)
+        return f'• <a href="{html.escape(url, quote=True)}">{name}</a> · {group} · {context}'
+
+    row = render()
+    if max_length is None or len(row) <= max_length:
+        return row
+    # Shorten source text before escaping so tags and entities always stay complete.
+    low, high = 0, max(map(len, values))
+    while low < high:
+        middle = (low + high + 1) // 2
+        if len(render(middle)) <= max_length:
+            low = middle
+        else:
+            high = middle - 1
+    row = render(low)
+    if len(row) > max_length:
+        raise ValueError("Digest limit is too small for a complete student link")
+    return row
 
 
 def render_digest_parts(grouped: Dict[str, List[Dict]], bot_username: str,
@@ -164,7 +188,9 @@ def render_digest_parts(grouped: Dict[str, List[Dict]], bot_username: str,
         if not subscriptions:
             continue
         heading = f"<b>{html.escape(ALERT_TITLES[alert_type])}</b>"
-        rows = [_digest_row(sub, alert_type, bot_username) for sub in subscriptions]
+        row_limit = limit - len(page_header) - len(heading) - 4
+        rows = [_digest_row(sub, alert_type, bot_username, row_limit)
+                for sub in subscriptions]
         block = heading
         for row in rows:
             addition = "\n" + row
@@ -180,9 +206,7 @@ def render_digest_parts(grouped: Dict[str, List[Dict]], bot_username: str,
                 if current != page_header:
                     pages.append(current)
                     current = page_header
-                # Sheet values are bounded in practice; truncate pathological context.
-                available = limit - len(page_header) - len(heading) - 4
-                block = heading + "\n" + row[:available]
+                block = heading + "\n" + row
         if len(current + "\n\n" + block) > limit and current != page_header:
             pages.append(current)
             current = page_header + "\n\n" + block
@@ -206,10 +230,10 @@ def build_trainer_alert_card(subscription: Dict, alert_type: str) -> str:
         f"☑️ <b>Использовано:</b> {html.escape(format_usage(subscription))}",
         f"📅 <b>Даты посещений:</b>\n{dates}",
     ]
-    if alert_type == "unpaid":
-        lines.append(f"\n💳 <b>Оплата:</b> ⚠️ {html.escape(_context(subscription, alert_type))}")
-    else:
-        lines.append(f"\n<b>Ситуация:</b> {html.escape(ALERT_EXPLANATIONS[alert_type])}")
-        if alert_type == "warning_7" and subscription.get("days_until_end"):
-            lines.append(f"⏳ Осталось дней: {html.escape(str(subscription['days_until_end']))}")
+    lines.append(f"\n<b>Ситуация:</b> {html.escape(ALERT_EXPLANATIONS[alert_type])}")
+    if alert_type == "warning_7" and subscription.get("days_until_end"):
+        lines.append(f"⏳ Осталось дней: {html.escape(str(subscription['days_until_end']))}")
+    unpaid_status = parse_unpaid_payment(subscription.get("deposit"))
+    if unpaid_status and is_started_subscription(subscription):
+        lines.append(f"\n💳 <b>Оплата:</b> ⚠️ {html.escape(unpaid_status)}")
     return "\n".join(lines)

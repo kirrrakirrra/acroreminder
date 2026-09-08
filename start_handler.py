@@ -55,7 +55,7 @@ async def save_user_if_new(user_id: int, username: str, full_name: str):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     payload = context.args[0] if getattr(context, "args", None) else ""
-    if payload.startswith("sa1"):
+    if payload.startswith("sa1."):
         unavailable = "Карточка недоступна или ситуация уже изменилась."
         parsed = parse_alert_payload(payload)
         admin_ids = {
