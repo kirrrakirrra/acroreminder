@@ -222,7 +222,7 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
     for attempt in range(1, 4):
         try:
             sheets_service.values().append(
-                spreadsheetId=SPREADSHEET_ID, range="Опросы!A1",
+                spreadsheetId=SPREADSHEET_ID, range="Опросы!A:G",
                 valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
                 body={"values": survey_row},
             ).execute()
