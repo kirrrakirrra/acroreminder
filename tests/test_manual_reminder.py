@@ -207,7 +207,7 @@ def test_report_persistence_failure_retries_without_resending_telegram(monkeypat
     failed_request = Mock()
     failed_request.execute.side_effect = RuntimeError("sheets unavailable")
     values.append.side_effect = lambda **kwargs: (
-        survey_request if kwargs["range"] == "Опросы!A1" else failed_request
+        survey_request if kwargs["range"] == "Опросы!A:G" else failed_request
     )
     ctx = context()
     callback = update(1, "yes|0|2026-09-08")
@@ -235,7 +235,7 @@ def test_survey_persistence_retries_then_full_success_without_telegram_resend(mo
     report.execute.return_value = {}
     survey_attempts = iter([failed, succeeded])
     values.append.side_effect = lambda **kwargs: (
-        next(survey_attempts) if kwargs["range"] == "Опросы!A1" else report
+        next(survey_attempts) if kwargs["range"] == "Опросы!A:G" else report
     )
     ctx = context()
     callback = update(1, "yes|0|2026-09-08")
@@ -256,7 +256,7 @@ def test_survey_persistence_exhaustion_still_saves_report_and_is_partial(monkeyp
     report = Mock()
     report.execute.return_value = {}
     values.append.side_effect = lambda **kwargs: (
-        failed if kwargs["range"] == "Опросы!A1" else report
+        failed if kwargs["range"] == "Опросы!A:G" else report
     )
     ctx = context()
     callback = update(1, "yes|0|2026-09-08")
