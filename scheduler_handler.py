@@ -13,6 +13,7 @@ from subscription_tools import (
     is_started_subscription,
     parse_unpaid_payment,
 )
+from subscription_alerts import collect_alerts, render_digest_parts
 import asyncio
 import os
 import logging
@@ -331,205 +332,26 @@ async def send_reminder_command(update: Update, context: ContextTypes.DEFAULT_TY
 # -----------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------
 async def check_expired_subscriptions(app, today_group_names):
+    """Send one logical trainer digest for the groups in this scheduler window."""
     logging.info("🔍 check_expired_subscriptions запущена")
-
     try:
         all_subscriptions = await asyncio.to_thread(load_all_subscriptions)
-
         if not all_subscriptions:
             logging.warning("⛔️ Не удалось загрузить абонементы или список пуст.")
             return
-
         logging.info(f"🔎 Группы, которые проверяются сегодня: {today_group_names}")
-
-        subscriptions_today = [
-            sub for sub in all_subscriptions
-            if sub.get("group") in today_group_names
-        ]
-
-        if not subscriptions_today:
-            logging.info("ℹ️ Нет абонементов для групп на сегодня.")
-            return
-
-        found = False
-        unpaid_subscriptions = []
-        checked_groups = {sub.get("group") for sub in subscriptions_today}
-
-        for sub in subscriptions_today:
-            name = sub.get("name", "—")
-            group = sub.get("group", "—")
-            sub_type = sub.get("subscription_type")
-            sub_type_raw = sub.get("subscription_type_raw", "—")
-            start_date = sub.get("start_date_raw", "—")
-            end_date = sub.get("end_date_raw", "—")
-            used = sub.get("used", 0)
-            unused_raw = str(sub.get("unused", "")).strip()
-            # difference = str(sub.get("difference", "")).strip()
-            wo_left = sub.get("wo_left_until_end", 0)
-            days_until_end = str(sub.get("days_until_end", "")).strip()
-            visit_dates = sub.get("visit_dates", [])
-            warning_7 = str(sub.get("warning_7", "")).strip().lower() == "warning_7"
-
-            logging.info(
-                f"[expired-debug] name={name}, raw={sub_type_raw}, normalized={sub_type}, unused={unused_raw}, warning_7={warning_7}"
-            )
-
-            # Blank rows and drop-ins are not subscription notifications.
-            if (
-                not str(sub_type_raw).strip()
-                or not sub_type
-                or sub_type == "drop_in"
-                or sub_type_raw.lower() == "разово"
-            ):
-                continue
-
-            unpaid_status = parse_unpaid_payment(sub.get("deposit"))
-            if unpaid_status and is_started_subscription(sub):
-                unpaid_subscriptions.append((name, group, unpaid_status))
-
-            try:
-                unused = int(unused_raw) if unused_raw != "" else None
-            except ValueError:
-                unused = None
-
-            dates_text = "\n".join(
-                [f"{i}. {d}" for i, d in enumerate(visit_dates, start=1)]
-            ) if visit_dates else "—"
-
-            parts = [
-                f"👤 *Имя:* {name}",
-                f"🏷️ *Группа:* {group}",
-                f"🧾 *Абонемент:* {sub_type_raw}",
-                f"📆 *Срок действия:* {start_date} — {end_date}",
-            ]
-
-            should_send = False
-            status = get_subscription_alert_status(sub)
-
-            if status == "expired":
-                parts.insert(0, "📛 *Срок действия абонемента истёк*")
-                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
-                parts.append(
-                    "\n💳 *Не забудьте оплатить следующий абонемент, "
-                    "чтобы сохранить место в группе.*"
-                )
-                should_send = True
-
-            elif status == "finished":
-                parts.insert(0, "❌ *Абонемент завершён*")
-                parts.append(f"☑️ *Использовано:* {used}")
-                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
-                parts.append(
-                    "\n💳 *Не забудьте оплатить следующий абонемент, "
-                    "чтобы сохранить место в группе.*"
-                )
-                should_send = True
-
-            elif status == "no_calendar_lessons":
-                parts.insert(0, "⛔️ *Абонемент завершён по расписанию*")
-                parts.append(f"☑️ *Использовано:* {used}")
-                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
-                parts.append(
-                    "\nПо расписанию больше нет занятий, которые входят в срок этого абонемента."
-                )
-                parts.append(
-                    "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
-                    "чтобы сохранить место в группе.*"
-                )
-                should_send = True
-            
-            elif status == "last_calendar_lesson_today":
-                parts.insert(0, "🚨 *Сегодня финальный день абонемента*")
-                parts.append(f"☑️ *Использовано:* {used}")
-                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
-                parts.append(
-                    "\nСегодня последнее занятие, которое попадает в срок действия абонемента."
-                )
-                parts.append(
-                    "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
-                    "чтобы сохранить место в группе.*"
-                )
-                should_send = True
-            
-            elif status == "last_calendar_lesson":
-                parts.insert(0, "❕🗓️ *Осталось одно занятие в рамках абонемента*")
-                parts.append(f"☑️ *Использовано:* {used}")
-                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
-                parts.append(
-                    "\nВ срок действия абонемента попадает ещё только одно занятие."
-                )
-                parts.append(
-                    "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
-                    "чтобы сохранить место в группе.*"
-                )
-                should_send = True
-
-            elif status == "last_lesson":
-                parts.insert(0, "❕ *В абонементе осталось 1 занятие*")
-                parts.append(f"☑️ *Использовано:* {used}")
-                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
-                parts.append(
-                    "\n💳 *Пожалуйста, внесите оплату за следующий абонемент, "
-                    "чтобы сохранить место в группе.*"
-                )
-                should_send = True
-
-            elif status == "warning_7":
-                parts.insert(0, "⏳ *До конца абонемента осталось менее 7 дней*")
-                parts.append(f"📅 *Даты посещений:*\n{dates_text}")
-
-                if days_until_end:
-                    parts.append(f"\n⏳ *Осталось дней до конца абонемента:* {days_until_end}")
-
-                parts.append(
-                    f"\n💳 *Пожалуйста, внесите оплату за следующий абонемент до {end_date}, "
-                    "чтобы сохранить место в группе.*"
-                )
-                should_send = True
-
-                # # Difference добавляем как доп. блок в то же сообщение
-                # if difference:
-                #     parts.append(
-                #         f"\n⚠️ *Осталось занятий:* *{sub.get('unused', 0)}*\n"
-                #         f"*Тренировок до конца абонемента:* *{wo_left}*\n"
-                #         "_Неиспользованные занятия не переносятся._"
-                #     )
-                #     should_send = True
-
-            if should_send:
-                msg = "\n".join(parts)
-
-                await app.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=msg,
-                    parse_mode="Markdown"
-                )
-                logging.info(f"📤 Отправлено сообщение по абонементу: {name} / {group}")
-                found = True
-
-        if unpaid_subscriptions:
-            show_group = len(checked_groups) > 1
-            unpaid_lines = []
-            for name, group, unpaid_status in unpaid_subscriptions:
-                group_context = f" ({group})" if show_group else ""
-                unpaid_lines.append(
-                    f"⚠️ {name}{group_context} — {unpaid_status}"
-                )
-
-            await app.bot.send_message(
-                chat_id=ADMIN_ID,
-                text="💳 *Неоплаченные абонементы*\n\n" + "\n".join(unpaid_lines),
-                parse_mode="Markdown",
-            )
-            logging.info(
-                "📤 Отправлен сводный список неоплаченных абонементов: %d",
-                len(unpaid_subscriptions),
-            )
-            found = True
-
-        if not found:
+        grouped = collect_alerts(all_subscriptions, today_group_names)
+        if not grouped:
             logging.info("✅ Нет завершённых или проблемных абонементов для отправки.")
-
+            return
+        bot_username = getattr(app.bot, "username", None) or os.getenv("BOT_USERNAME")
+        if not bot_username:
+            bot_user = await app.bot.get_me()
+            bot_username = bot_user.username
+        for message in render_digest_parts(grouped, bot_username):
+            await app.bot.send_message(chat_id=ADMIN_ID, text=message,
+                                       parse_mode="HTML", disable_web_page_preview=True)
+        logging.info("📤 Отправлен digest абонементов (%d категорий)", len(grouped))
     except Exception as e:
         logging.warning(f"❗️ Ошибка при проверке завершённых абонементов: {e}")
 

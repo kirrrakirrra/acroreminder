@@ -217,6 +217,8 @@ def scheduler_subscription(name, group="Group", sub_type="sub_5"):
         "unused": 2,
         "deposit": "не оплачено",
         "start_date": datetime.now() - timedelta(days=1),
+        "sheet_name": "Группы 4-5",
+        "row_number": 3,
     })
     return subscription
 
@@ -231,7 +233,7 @@ def test_scheduler_excludes_blank_drop_in_and_future_unpaid_subscriptions(monkey
     monkeypatch.setattr(handler, "load_all_subscriptions", Mock(
         return_value=[blank, drop_in, future]
     ))
-    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(), username="acro_bot"))
 
     asyncio.run(handler.check_expired_subscriptions(app, ["Group"]))
 
@@ -246,17 +248,18 @@ def test_scheduler_aggregates_started_unpaid_subscriptions_independently(monkeyp
     # An expiry alert must not suppress the independent unpaid entry.
     first["days_until_end"] = "expired"
     monkeypatch.setattr(handler, "load_all_subscriptions", Mock(return_value=[first, second]))
-    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(), username="acro_bot"))
 
     asyncio.run(handler.check_expired_subscriptions(app, ["Group A", "Group B"]))
 
-    assert app.bot.send_message.await_count == 2  # one expiry + one unpaid aggregate
-    unpaid_call = app.bot.send_message.await_args_list[-1]
-    text = unpaid_call.kwargs["text"]
-    assert text.count("*Неоплаченные абонементы*") == 1
-    assert "Коротченко Дима (Group A) — не оплачено" in text
-    assert "Иванова Аня (Group B) — не оплачено 100" in text
-    assert unpaid_call.kwargs["chat_id"] == 1
+    app.bot.send_message.assert_awaited_once()
+    digest_call = app.bot.send_message.await_args
+    text = digest_call.kwargs["text"]
+    assert text.count("Неоплаченные абонементы") == 1
+    assert "Коротченко Дима</a> · Group A · не оплачено" in text
+    assert "Иванова Аня</a> · Group B · не оплачено 100" in text
+    assert text.count("Коротченко Дима") == 2  # primary status and independent unpaid
+    assert digest_call.kwargs["chat_id"] == 1
 
 
 def test_scheduler_uses_parsed_day_month_date_for_started_unpaid(monkeypatch):
@@ -283,13 +286,13 @@ def test_scheduler_uses_parsed_day_month_date_for_started_unpaid(monkeypatch):
     monkeypatch.setattr(handler, "load_all_subscriptions", Mock(
         return_value=[started, future]
     ))
-    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(), username="acro_bot"))
 
     asyncio.run(handler.check_expired_subscriptions(app, ["Group"]))
 
     app.bot.send_message.assert_awaited_once()
     text = app.bot.send_message.await_args.kwargs["text"]
-    assert "Started — не оплачено" in text
+    assert "Started</a> · Group · не оплачено" in text
     assert "Future" not in text
 
 
