@@ -94,7 +94,7 @@ async def handle_poll_answer(update, context):
         ]]
         sheets_service.values().append(
             spreadsheetId=SPREADSHEET_ID,
-            range=SURVEY_SHEET,
+            range=f"{SURVEY_SHEET}!A:G",
             valueInputOption="USER_ENTERED",
             insertDataOption="INSERT_ROWS",
             body={"values": new_row}
