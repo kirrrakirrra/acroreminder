@@ -1,11 +1,10 @@
 import asyncio
-import datetime
 import logging
+import os
 from collections import deque
 import nest_asyncio
-import pytz
-from datetime import datetime
 from aiohttp import web
+from logging_config import configure_logging
 from utils import now_local, format_now
 from scheduler_handler import scheduler, handle_callback, send_reminder_command
 from start_handler import get_start_handler
@@ -23,25 +22,12 @@ from telegram.ext import (
     PollAnswerHandler
 )
 
-class VietnamFormatter(logging.Formatter):
-    tz = pytz.timezone("Asia/Ho_Chi_Minh")
-
-    def formatTime(self, record, datefmt=None):
-        dt = datetime.fromtimestamp(record.created, self.tz)
-        return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
-
-formatter = VietnamFormatter("%(asctime)s - %(levelname)s - %(message)s")
-
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+configure_logging(BOT_TOKEN)
 
 async def error_handler(update, context):
     logging.error(f"❗ Ошибка: {context.error}")
     
-import os
-BOT_TOKEN = os.getenv("BOT_TOKEN")
 # ADMIN_ID = os.getenv("ADMIN_ID")
 # GROUP_ID = os.getenv("GROUP_ID")
 
