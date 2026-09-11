@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
 from google.oauth2 import service_account
@@ -16,10 +17,12 @@ SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 # Google Sheets
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
-sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+def _read_report_rows():
+    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    service = build('sheets', 'v4', credentials=creds).spreadsheets()
+    return service.values().get(
+        spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
+    ).execute().get("values", [])
 
 # Авторизация
 def is_authorized(user_id: int) -> bool:
@@ -43,11 +46,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         today = format_now().split(" ")[0]  # формат: "2025-11-06"
 
         # Получаем строки из таблицы "Репорты"
-        resp = sheets_service.values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range="Репорты!A2:G"
-        ).execute()
-        rows = resp.get("values", [])
+        rows = await asyncio.to_thread(_read_report_rows)
 
         # Фильтруем только сегодняшние
         # A replacement poll is the last row for an occurrence.  This also makes

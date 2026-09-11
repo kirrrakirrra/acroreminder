@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+from collections import deque
 import nest_asyncio
 import pytz
 from datetime import datetime
@@ -48,21 +49,64 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 async def handle_ping(request):
     return web.Response(text="I'm alive!")
 
-async def start_webserver(app):
-    from telegram import Update
+RECENT_UPDATE_LIMIT = 4096
 
-    async def webhook_handler(request):
+
+class WebhookUpdateProcessor:
+    """Promptly accept, deduplicate, and track Telegram update tasks."""
+
+    def __init__(self, app, cache_limit=RECENT_UPDATE_LIMIT):
+        self.app = app
+        self.cache_limit = cache_limit
+        self.recent_ids = set()
+        self.recent_order = deque()
+        self.active_tasks = set()
+
+    def _accept(self, update_id):
+        if update_id in self.recent_ids:
+            return False
+        self.recent_ids.add(update_id)
+        self.recent_order.append(update_id)
+        while len(self.recent_order) > self.cache_limit:
+            self.recent_ids.discard(self.recent_order.popleft())
+        return True
+
+    def _finished(self, task):
+        self.active_tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logging.error(
+                "Background webhook update failed",
+                exc_info=(type(task.exception()), task.exception(), task.exception().__traceback__),
+            )
+
+    async def handle(self, request):
         try:
             data = await request.json()
-            update = Update.de_json(data, app.bot)
-            await app.process_update(update)
-        except Exception as e:
-            logging.error(f"Ошибка при обработке webhook: {e}")
-        return web.Response()
+            update = Update.de_json(data, self.app.bot)
+            if update.update_id is None:
+                raise ValueError("Telegram update has no update_id")
+        except Exception as exc:
+            logging.warning("Malformed webhook request: %s", exc)
+            return web.Response(status=400)
+
+        if self._accept(update.update_id):
+            task = asyncio.create_task(
+                self.app.process_update(update), name=f"telegram-update-{update.update_id}"
+            )
+            self.active_tasks.add(task)
+            task.add_done_callback(self._finished)
+        else:
+            logging.info("Ignoring duplicate Telegram update_id=%s", update.update_id)
+        return web.Response(status=200)
+
+
+async def start_webserver(app):
+    processor = WebhookUpdateProcessor(app)
 
     web_app = web.Application()
+    web_app["telegram_update_processor"] = processor
     web_app.router.add_get("/", handle_ping)
-    web_app.router.add_post("/webhook", webhook_handler)
+    web_app.router.add_post("/webhook", processor.handle)
 
     runner = web.AppRunner(web_app)
     await runner.setup()
@@ -76,7 +120,7 @@ async def main():
     # Инициализация приложения
     await app.initialize()
 
-    restore_poll_to_group()
+    await asyncio.to_thread(restore_poll_to_group)
     
     # Хендлеры
     app.add_handler(get_start_handler())

@@ -17,6 +17,9 @@ from subscription_alerts import collect_alerts, render_digest_parts
 import asyncio
 import os
 import logging
+import time
+from collections import defaultdict
+from telegram.error import BadRequest, TelegramError
 
 # ------------------------------------------------------------------------------------
 groups = GROUPS
@@ -39,10 +42,33 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # переменная должна быть в Render Environment
 
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
+# Kept as a legacy test seam only. Runtime worker operations use a newly built client.
+creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+
+def create_sheets_service():
+    """Create an isolated client; googleapiclient transports are not thread-safe."""
+    if not os.path.exists(SERVICE_ACCOUNT_FILE):  # test seam; production mounts this file
+        return sheets_service
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
+    return build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+
+def _timed_sheets(label, operation):
+    started = time.monotonic()
+    try:
+        return operation(create_sheets_service())
+    finally:
+        logging.info("Sheets %s completed in %.3fs", label, time.monotonic() - started)
+
+
+async def _run_sheets(label, operation):
+    return await asyncio.to_thread(_timed_sheets, label, operation)
+
+
+occurrence_locks = defaultdict(asyncio.Lock)
 
 # pending = {}
 
@@ -59,7 +85,7 @@ def get_decision_keyboard(group_id, lesson_date=None):
 
 async def ask_admin(app, group_id, group):
     lesson_date = get_lesson_date(now_local(), group).isoformat()
-    if occurrence_was_sent(group, lesson_date):
+    if await occurrence_was_sent_async(group, lesson_date):
         logging.info("[scheduler] Напоминание уже отправлено: %s/%s", group["name"], lesson_date)
         return False
     msg = await app.bot.send_message(
@@ -72,7 +98,16 @@ async def ask_admin(app, group_id, group):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except BadRequest as exc:
+        message = str(exc).lower()
+        if "query is too old" in message or "query id is invalid" in message or "response timeout expired" in message:
+            logging.warning("Callback acknowledgement expired; continuing action: %s", exc)
+        else:
+            logging.exception("Unexpected Telegram BadRequest acknowledging callback")
+    except TelegramError:
+        logging.exception("Telegram error acknowledging callback; continuing action")
     if update.effective_user.id not in (ADMIN_ID, KARINA_ID):
         await query.edit_message_text("⛔ Эта команда доступна только администратору.")
         return
@@ -102,21 +137,22 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    if action in ("yes", "select_reminder") and occurrence_was_sent(group, lesson_date):
-        await query.edit_message_text(
-            "⚠️ Напоминание и опрос для этого занятия уже отправлены. "
-            "Повторная отправка создаст ещё одно сообщение и опрос.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔁 Отправить заново", callback_data=f"resend_reminder|{group_id}|{lesson_date}")],
-                [InlineKeyboardButton("Отмена", callback_data="cancel_reminder")],
-            ]),
-        )
-        return
-
     if action in ("yes", "select_reminder", "resend_reminder"):
-        result = await send_reminder_and_poll(
-            context, group, lesson_date, replace=action == "resend_reminder"
-        )
+        occurrence = (group["name"], str(lesson_date))
+        async with occurrence_locks[occurrence]:
+            if action in ("yes", "select_reminder") and await occurrence_was_sent_async(group, lesson_date):
+                await query.edit_message_text(
+                    "⚠️ Напоминание и опрос для этого занятия уже отправлены. "
+                    "Повторная отправка создаст ещё одно сообщение и опрос.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔁 Отправить заново", callback_data=f"resend_reminder|{group_id}|{lesson_date}")],
+                        [InlineKeyboardButton("Отмена", callback_data="cancel_reminder")],
+                    ]),
+                )
+                return
+            result = await send_reminder_and_poll(
+                context, group, lesson_date, replace=action == "resend_reminder"
+            )
         await query.edit_message_text(result.admin_message)
     elif action == "skip":
         await query.edit_message_text("❌ Окей, ничего не публикуем.\nНапоминание: не забудьте сами сообщить группе о деталях отмены")
@@ -144,9 +180,9 @@ def validate_callback_occurrence(now, group, lesson_date):
 
 
 def _report_rows():
-    response = sheets_service.values().get(
+    response = _timed_sheets("reminder duplicate lookup", lambda service: service.values().get(
         spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
-    ).execute()
+    ).execute())
     return response.get("values", [])
 
 
@@ -158,6 +194,17 @@ def occurrence_was_sent(group, lesson_date):
         len(row) >= 7 and row[1] == group["name"] and str(row[6])[:10] == str(lesson_date)
         for row in _report_rows()
     )
+
+
+async def occurrence_was_sent_async(group, lesson_date):
+    occurrence = (group["name"], str(lesson_date))
+    if occurrence in in_process_sent_occurrences:
+        return True
+    rows = await _run_sheets("reminder duplicate lookup", lambda service: service.values().get(
+        spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
+    ).execute().get("values", []))
+    return any(len(row) >= 7 and row[1] == group["name"] and str(row[6])[:10] == str(lesson_date)
+               for row in rows)
 
 
 class DeliveryResult:
@@ -222,11 +269,11 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
     survey_persisted = False
     for attempt in range(1, 4):
         try:
-            sheets_service.values().append(
+            await _run_sheets("Опросы persistence", lambda service: service.values().append(
                 spreadsheetId=SPREADSHEET_ID, range="Опросы!A:G",
                 valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
                 body={"values": survey_row},
-            ).execute()
+            ).execute())
             survey_persisted = True
             logging.info("✅ Опросы сохранены: %s/%s (попытка %d)", *occurrence, attempt)
             break
@@ -247,7 +294,9 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
     persistence_error = None
     for attempt in range(1, 4):
         try:
-            rows = _report_rows()
+            rows = await _run_sheets("Репорты duplicate lookup", lambda service: service.values().get(
+                spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
+            ).execute().get("values", []))
             matches = [
                 i for i, row in enumerate(rows, start=2)
                 if len(row) >= 7 and row[1] == group["name"]
@@ -258,17 +307,17 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
                 logging.info("✅ Репорты уже сохранены: %s/%s", *occurrence)
                 break
             if replace and matches:
-                sheets_service.values().update(
+                await _run_sheets("Репорты persistence", lambda service: service.values().update(
                     spreadsheetId=SPREADSHEET_ID,
                     range=f"Репорты!A{matches[-1]}:G{matches[-1]}",
                     valueInputOption="USER_ENTERED", body={"values": report_row},
-                ).execute()
+                ).execute())
             else:
-                sheets_service.values().append(
+                await _run_sheets("Репорты persistence", lambda service: service.values().append(
                     spreadsheetId=SPREADSHEET_ID, range="Репорты!A1",
                     valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
                     body={"values": report_row},
-                ).execute()
+                ).execute())
             persistence_error = None
             logging.info("✅ Репорты сохранены: %s/%s (попытка %d)", *occurrence, attempt)
             break
@@ -509,10 +558,10 @@ async def scheduler(app):
                     logging.info("[scheduler] Отправляем репорты по группам...")
                     logging.info(f"[scheduler] Группы для репорта: {[g['name'] for g in report_groups_to_check]}")
             
-                    resp = sheets_service.values().get(
+                    resp = await _run_sheets("scheduled Репорты lookup", lambda service: service.values().get(
                         spreadsheetId=SPREADSHEET_ID,
                         range="Репорты!A2:G"
-                    ).execute()
+                    ).execute())
                     today_str = now.strftime("%Y-%m-%d")
                     rows = canonical_report_rows(resp.get("values", []), today_str)
             

@@ -21,34 +21,25 @@ SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 USERS_SHEET = 'users'
 
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
-sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+def _save_user_if_new(user_id: int, username: str, full_name: str):
+    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+    result = sheets_service.values().get(
+        spreadsheetId=SPREADSHEET_ID, range=f"{USERS_SHEET}!A2:A"
+    ).execute()
+    existing_ids = [row[0] for row in result.get('values', [])]
+    if str(user_id) not in existing_ids:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        new_row = [str(user_id), f"@{username}" if username else "", full_name, now]
+        sheets_service.values().append(
+            spreadsheetId=SPREADSHEET_ID, range=USERS_SHEET,
+            valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+            body={"values": [new_row]},
+        ).execute()
 
 async def save_user_if_new(user_id: int, username: str, full_name: str):
     try:
-        result = sheets_service.values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{USERS_SHEET}!A2:A"
-        ).execute()
-        existing_ids = [row[0] for row in result.get('values', [])]
-
-        if str(user_id) not in existing_ids:
-            now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            new_row = [
-                str(user_id),
-                f"@{username}" if username else "",
-                full_name,
-                now
-            ]
-            sheets_service.values().append(
-                spreadsheetId=SPREADSHEET_ID,
-                range=USERS_SHEET,
-                valueInputOption="USER_ENTERED",
-                insertDataOption="INSERT_ROWS",
-                body={"values": [new_row]}
-            ).execute()
+        await asyncio.to_thread(_save_user_if_new, user_id, username, full_name)
     except Exception as e:
         logging.warning(f"Не удалось сохранить юзера в таблицу: {e}")
 

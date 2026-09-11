@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 from subscription_tools import parse_unpaid_payment
 from utils import now_local, format_now, notify_karina_action
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
@@ -43,10 +44,29 @@ SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SURVEY_SHEET = 'Опросы'
 USERNAMES_SHEET = "usernames"
 
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
+# Kept as a legacy test seam only. Runtime worker operations use a newly built client.
+creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+
+def create_sheets_service():
+    if not os.path.exists(SERVICE_ACCOUNT_FILE):  # test seam; production mounts this file
+        return sheets_service
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
+    return build('sheets', 'v4', credentials=credentials).spreadsheets()
+
+
+def _timed_sheets(label, operation):
+    started = time.monotonic()
+    try:
+        return operation(create_sheets_service())
+    finally:
+        logging.info("Sheets %s completed in %.3fs", label, time.monotonic() - started)
+
+
+async def _run_sheets(label, operation):
+    return await asyncio.to_thread(_timed_sheets, label, operation)
 
 # Обработчик голосов
 async def handle_poll_answer(update, context):
@@ -92,13 +112,13 @@ async def handle_poll_answer(update, context):
             full_name,
             option_text
         ]]
-        sheets_service.values().append(
+        await _run_sheets("poll-answer persistence", lambda service: service.values().append(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{SURVEY_SHEET}!A:G",
             valueInputOption="USER_ENTERED",
             insertDataOption="INSERT_ROWS",
             body={"values": new_row}
-        ).execute()
+        ).execute())
         logging.info(f"✅ Ответ опроса записан: {user_id} / @{username} — {option_text}")
     except Exception as e:
         logging.warning(f"❗ Не удалось записать голос в таблицу: {e}")
@@ -110,10 +130,10 @@ def restore_poll_to_group():
     чтобы знать, какой опрос к какой группе относится (в случае перезапуска).
     """
     try:
-        resp = sheets_service.values().get(
+        resp = _timed_sheets("poll mapping restore", lambda service: service.values().get(
             spreadsheetId=SPREADSHEET_ID,
             range="Опросы!A2:G"  # A2 — пропустить заголовок, G — колонка "ответ"
-        ).execute()
+        ).execute())
 
         rows = resp.get("values", [])
         for row in rows:
@@ -130,10 +150,10 @@ def restore_poll_to_group():
         # Репорты contain the same durable poll/group relationship. Prefer the
         # richer Опросы history, and use only canonical report occurrences for
         # poll IDs that were not available there.
-        reports_resp = sheets_service.values().get(
+        reports_resp = _timed_sheets("report mapping restore", lambda service: service.values().get(
             spreadsheetId=SPREADSHEET_ID,
             range="Репорты!A2:G"
-        ).execute()
+        ).execute())
         report_rows = canonical_report_rows(reports_resp.get("values", []))
         fallback_count = 0
         for row in report_rows:
@@ -205,10 +225,10 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         
         group_name_code = group["name"]
 
-        resp = sheets_service.values().get(
+        resp = await _run_sheets("report usernames read", lambda service: service.values().get(
             spreadsheetId=SPREADSHEET_ID,
             range=USERNAMES_SHEET + "!A1:N"
-        ).execute()
+        ).execute())
         rows = resp.get("values", [])
         
         header = rows[0]
@@ -378,10 +398,10 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
         # 4. Записываем связку в таблицу "Репорты"
         try:
             found = False
-            resp = sheets_service.values().get(
+            resp = await _run_sheets("Репорты persistence lookup", lambda service: service.values().get(
                 spreadsheetId=SPREADSHEET_ID,
                 range="Репорты!A2:G"
-            ).execute()
+            ).execute())
             rows = resp.get("values", [])
         
             for i, row in enumerate(rows, start=2):  # строки начинаются с A2
@@ -391,12 +411,12 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                     safe_report_id = str(report_msg_id) if report_msg_id is not None else ""
                     safe_ping_id = str(ping_msg_id) if ping_msg_id is not None else ""
             
-                    sheets_service.values().update(
+                    await _run_sheets("Репорты persistence", lambda service: service.values().update(
                         spreadsheetId=SPREADSHEET_ID,
                         range=f"Репорты!C{i}:D{i}",
                         valueInputOption="USER_ENTERED",
                         body={"values": [[safe_report_id, safe_ping_id]]}
-                    ).execute()
+                    ).execute())
             
                     logging.info(f"✏️ Обновлены message_id в строке {i}")
                     break
@@ -411,13 +431,13 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                     safe_ping_id,
                     "", "", ""
                 ]]
-                sheets_service.values().append(
+                await _run_sheets("Репорты persistence", lambda service: service.values().append(
                     spreadsheetId=SPREADSHEET_ID,
                     range="Репорты!A1",
                     valueInputOption="USER_ENTERED",
                     insertDataOption="INSERT_ROWS",
                     body={"values": new_row}
-                ).execute()
+                ).execute())
                 logging.info(f"✅ Связка сообщений записана в Репорты (новая строка)")
         except Exception as e:
             logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
@@ -437,10 +457,10 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
 
     try:
         # 1️⃣ Берём строку с нужным poll_id из таблицы "Репорты"
-        resp = sheets_service.values().get(
+        resp = await _run_sheets("Репорты refresh lookup", lambda service: service.values().get(
             spreadsheetId=SPREADSHEET_ID,
             range="Репорты!A2:G"
-        ).execute()
+        ).execute())
         rows = resp.get("values", [])
         row = next((r for r in rows if r[0] == poll_id), None)
 
@@ -481,12 +501,12 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
                     safe_report_id = str(new_report_id) if new_report_id is not None else ""
                     safe_ping_id = str(new_ping_id) if new_ping_id is not None else ""
                     
-                    sheets_service.values().update(
+                    await _run_sheets("Репорты persistence", lambda service: service.values().update(
                         spreadsheetId=SPREADSHEET_ID,
                         range=update_range,
                         valueInputOption="RAW",
                         body={"values": [[safe_report_id, safe_ping_id]]}
-                    ).execute()
+                    ).execute())
                     logging.info(f"✏️ Обновлены message_id в строке {i} для poll_id={poll_id}")
                     break
         except Exception as e:
@@ -517,10 +537,10 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
         user = update.effective_user
         await notify_karina_action(context, user, f"📣 Отправка родителям\npoll_id={poll_id}")
 
-        resp = sheets_service.values().get(
+        resp = await _run_sheets("Репорты notification lookup", lambda service: service.values().get(
             spreadsheetId=SPREADSHEET_ID,
             range="Репорты!A2:G"
-        ).execute()
+        ).execute())
         rows = resp.get("values", [])
 
         row = next((r for r in rows if len(r) > 0 and r[0] == poll_id), None)
