@@ -395,23 +395,13 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
                     break
         
             if not found and report_msg:
-                safe_report_id = str(report_msg_id) if report_msg_id is not None else ""
-                safe_ping_id = str(ping_msg_id) if ping_msg_id is not None else ""
-                new_row = [[
-                    str(poll_id).strip(),
-                    group_name_code,
-                    safe_report_id,
-                    safe_ping_id,
-                    "", "", ""
-                ]]
-                await _run_sheets("Репорты persistence", lambda service: service.values().append(
-                    spreadsheetId=SPREADSHEET_ID,
-                    range="Репорты!A1",
-                    valueInputOption="USER_ENTERED",
-                    insertDataOption="INSERT_ROWS",
-                    body={"values": new_row}
-                ).execute())
-                logging.info(f"✅ Связка сообщений записана в Репорты (новая строка)")
+                # Report entry points recover a complete occurrence first.  A
+                # missing row here is unsafe to recreate because this function
+                # does not know the occurrence date.
+                logging.warning(
+                    "Не сохранены message_id: полная строка Репорты не найдена для poll_id=%s",
+                    poll_id,
+                )
         except Exception as e:
             logging.warning(f"❗ Ошибка при записи связки в Репорты: {e}")
     
