@@ -5,7 +5,8 @@ from telegram.ext import ContextTypes
 from sheets_runtime import run_sheets
 from utils import format_now, notify_karina_action  # ⬅️ у тебя уже есть локализованное время
 from reminder_handler import send_admin_report, poll_to_group
-from report_rows import canonical_report_rows
+from report_rows import canonical_report_rows, recover_missing_report_occurrences
+from group_config import GROUPS
 
 # Получаем переменные из окружения
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
@@ -36,10 +37,9 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         today = format_now().split(" ")[0]  # формат: "2025-11-06"
 
-        # Получаем строки из таблицы "Репорты"
-        rows = await run_sheets("manual Репорты lookup", lambda service: service.values().get(
-            spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
-        ).execute().get("values", []))
+        rows = await recover_missing_report_occurrences(
+            run_sheets, SPREADSHEET_ID, GROUPS
+        )
 
         # Фильтруем только сегодняшние
         # A replacement poll is the last row for an occurrence.  This also makes

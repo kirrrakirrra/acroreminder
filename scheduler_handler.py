@@ -4,7 +4,7 @@ from reminder_handler import poll_to_group, send_admin_report
 from utils import LOCAL_TZ, now_local,format_now
 from datetime import datetime, timedelta
 from group_config import GROUPS, GROUP_NAME_MAP
-from report_rows import canonical_report_rows
+from report_rows import canonical_report_rows, recover_missing_report_occurrences
 from subscription_tools import (
     load_all_subscriptions,
     get_subscription_alert_status,
@@ -477,6 +477,38 @@ def should_send_report_for_group(now, group: dict) -> bool:
         return False
 
     return True
+
+
+async def generate_scheduled_reports(app, report_groups, report_date):
+    """Recover and render the configured report occurrences for one date."""
+    recovered_rows = await recover_missing_report_occurrences(
+        _run_sheets, SPREADSHEET_ID, groups
+    )
+    rows = canonical_report_rows(recovered_rows, report_date)
+
+    def safe_int(value):
+        text = str(value).strip() if value is not None else ""
+        if not text or text.lower() == "none":
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
+
+    for group in report_groups:
+        group_name = group["name"]
+        row = next((r for r in rows if r[1] == group_name), None)
+        if not row:
+            logging.info("[scheduler] Нет строки Репорты на сегодня для группы %s", group_name)
+            continue
+        poll_id = row[0]
+        poll_to_group[poll_id] = {"name": group_name}
+        await send_admin_report(
+            app=app,
+            poll_id=poll_id,
+            report_message_id=safe_int(row[2]),
+            ping_message_id=safe_int(row[3]),
+        )
     
 async def scheduler(app):
     
@@ -549,46 +581,9 @@ async def scheduler(app):
                     logging.info("[scheduler] Отправляем репорты по группам...")
                     logging.info(f"[scheduler] Группы для репорта: {[g['name'] for g in report_groups_to_check]}")
             
-                    resp = await _run_sheets("scheduled Репорты lookup", lambda service: service.values().get(
-                        spreadsheetId=SPREADSHEET_ID,
-                        range="Репорты!A2:G"
-                    ).execute())
-                    today_str = now.strftime("%Y-%m-%d")
-                    rows = canonical_report_rows(resp.get("values", []), today_str)
-            
-                    for group in report_groups_to_check:
-                        group_name = group["name"]
-            
-                        row = next(
-                            (r for r in rows if len(r) >= 7 and r[1] == group_name and r[6].startswith(today_str)),
-                            None
-                        )
-            
-                        if not row:
-                            logging.info(f"[scheduler] Нет строки Репорты на сегодня для группы {group_name}")
-                            continue
-            
-                        def safe_int(value):
-                            text = str(value).strip() if value is not None else ""
-                            if not text or text.lower() == "none":
-                                return None
-                            try:
-                                return int(text)
-                            except ValueError:
-                                return None
-            
-                        poll_id = row[0]
-                        report_message_id = safe_int(row[2]) if len(row) > 2 else None
-                        ping_message_id = safe_int(row[3]) if len(row) > 3 else None
-            
-                        poll_to_group[poll_id] = {"name": group_name}
-            
-                        await send_admin_report(
-                            app=app,
-                            poll_id=poll_id,
-                            report_message_id=report_message_id,
-                            ping_message_id=ping_message_id
-                        )
+                    await generate_scheduled_reports(
+                        app, report_groups_to_check, now.strftime("%Y-%m-%d")
+                    )
             
                     last_report_check[report_keys] = now.date()
                 else:
