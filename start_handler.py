@@ -4,9 +4,8 @@ from datetime import datetime
 import logging
 import os
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
 import asyncio
+from sheets_runtime import run_sheets
 
 from subscription_tools import load_all_subscriptions
 from subscription_alerts import (
@@ -21,9 +20,7 @@ SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 USERS_SHEET = 'users'
 
-def _save_user_if_new(user_id: int, username: str, full_name: str):
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
+def _save_user_if_new(sheets_service, user_id: int, username: str, full_name: str):
     result = sheets_service.values().get(
         spreadsheetId=SPREADSHEET_ID, range=f"{USERS_SHEET}!A2:A"
     ).execute()
@@ -39,7 +36,10 @@ def _save_user_if_new(user_id: int, username: str, full_name: str):
 
 async def save_user_if_new(user_id: int, username: str, full_name: str):
     try:
-        await asyncio.to_thread(_save_user_if_new, user_id, username, full_name)
+        await run_sheets(
+            "new user persistence",
+            lambda service: _save_user_if_new(service, user_id, username, full_name),
+        )
     except Exception as e:
         logging.warning(f"Не удалось сохранить юзера в таблицу: {e}")
 

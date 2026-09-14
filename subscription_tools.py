@@ -6,8 +6,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
+from sheets_runtime import run_sheets_sync
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SERVICE_ACCOUNT_FILE = "service_account.json"
@@ -20,16 +19,6 @@ SUBSCRIPTION_SHEETS = [
 ]
 
 DATA_RANGE = "A2:AH32"  # 2 строка = заголовки, 3-32 = данные
-
-creds = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
-
-
-def create_subscription_sheets_service():
-    """Create a Sheets resource with a transport owned by the current load call."""
-    return build("sheets", "v4", credentials=creds).spreadsheets()
-
 
 def safe_get(row: List[str], idx: int, default: str = "") -> str:
     return row[idx].strip() if len(row) > idx and row[idx] else default
@@ -155,14 +144,14 @@ def load_all_subscriptions(
     if not requested_sheets:
         return all_subscriptions
 
-    # googleapiclient's httplib2 transport is not thread-safe.  Each invocation
-    # can run in a different asyncio worker thread, so it must own its service.
-    sheets_service = create_subscription_sheets_service()
     ranges = [f"'{sheet_name}'!{DATA_RANGE}" for sheet_name in requested_sheets]
-    resp = sheets_service.values().batchGet(
-        spreadsheetId=SPREADSHEET_ID,
-        ranges=ranges,
-    ).execute()
+    resp = run_sheets_sync(
+        "subscription batch lookup",
+        lambda service: service.values().batchGet(
+            spreadsheetId=SPREADSHEET_ID,
+            ranges=ranges,
+        ).execute(),
+    )
     value_ranges = resp.get("valueRanges", [])
 
     for index, sheet_name in enumerate(requested_sheets):

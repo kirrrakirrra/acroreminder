@@ -1,10 +1,8 @@
 import os
 import logging
-import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
+from sheets_runtime import run_sheets
 from utils import format_now, notify_karina_action  # ⬅️ у тебя уже есть локализованное время
 from reminder_handler import send_admin_report, poll_to_group
 from report_rows import canonical_report_rows
@@ -17,13 +15,6 @@ SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 # Google Sheets
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
-def _read_report_rows():
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    service = build('sheets', 'v4', credentials=creds).spreadsheets()
-    return service.values().get(
-        spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
-    ).execute().get("values", [])
-
 # Авторизация
 def is_authorized(user_id: int) -> bool:
     return user_id in (ADMIN_ID, KARINA_ID)
@@ -46,7 +37,9 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         today = format_now().split(" ")[0]  # формат: "2025-11-06"
 
         # Получаем строки из таблицы "Репорты"
-        rows = await asyncio.to_thread(_read_report_rows)
+        rows = await run_sheets("manual Репорты lookup", lambda service: service.values().get(
+            spreadsheetId=SPREADSHEET_ID, range="Репорты!A2:G"
+        ).execute().get("values", []))
 
         # Фильтруем только сегодняшние
         # A replacement poll is the last row for an occurrence.  This also makes
