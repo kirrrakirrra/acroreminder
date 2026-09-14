@@ -24,6 +24,7 @@ ADULT = {
 class Sheets:
     def __init__(self, reports=None, surveys=None):
         self.data = {"Репорты": list(reports or []), "Опросы": list(surveys or [])}
+        self.report_appends = 0
 
     def values(self):
         return self
@@ -33,7 +34,10 @@ class Sheets:
         return self
 
     def append(self, range, body, **_kwargs):
-        self.data[range.split("!")[0]].extend(row[:] for row in body["values"])
+        sheet = range.split("!")[0]
+        self.data[sheet].extend(row[:] for row in body["values"])
+        if sheet == "Репорты":
+            self.report_appends += 1
         self.result = {}
         return self
 
@@ -80,6 +84,34 @@ def test_existing_occurrence_is_not_duplicated():
     )
     recover(service)
     assert service.data["Репорты"] == [existing]
+
+
+def test_concurrent_recovery_serializes_fresh_read_and_single_append():
+    service = Sheets(surveys=[
+        creation("poll", "Детская", "2026-09-08 11:00:00"),
+    ])
+
+    async def yielding_run(_label, operation):
+        # Make an unlocked implementation reliably interleave both initial
+        # reads before either caller reaches its append.
+        await asyncio.sleep(0)
+        return operation(service)
+
+    async def recover_twice():
+        return await asyncio.gather(
+            recover_missing_report_occurrences(yielding_run, "sheet", [GROUP]),
+            recover_missing_report_occurrences(yielding_run, "sheet", [GROUP]),
+        )
+
+    results = asyncio.run(recover_twice())
+
+    assert len(results) == 2
+    assert service.report_appends == 1
+    assert service.data["Репорты"] == [
+        ["poll", "Детская", "", "", "-10", "7", "2026-09-08"],
+    ]
+    recover(service)
+    assert service.report_appends == 1
 
 
 def test_vote_malformed_timestamp_and_unknown_group_are_skipped():

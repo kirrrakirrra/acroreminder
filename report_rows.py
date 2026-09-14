@@ -1,9 +1,11 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 
 VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+_recovery_lock = asyncio.Lock()
 
 
 def canonical_report_rows(rows, report_date=None):
@@ -41,7 +43,17 @@ def _poll_creation_timestamp(row):
 
 
 async def recover_missing_report_occurrences(run_sheets, spreadsheet_id, groups):
-    """Backfill complete missing Репорты occurrences from Опросы metadata."""
+    """Backfill missing Репорты occurrences in one process-local critical section."""
+    # Manual updates and the scheduler can enter recovery concurrently.  Take
+    # the lock before either read so a waiter always observes all rows appended
+    # by the previous recovery rather than acting on a stale snapshot.
+    async with _recovery_lock:
+        return await _recover_missing_report_occurrences(
+            run_sheets, spreadsheet_id, groups
+        )
+
+
+async def _recover_missing_report_occurrences(run_sheets, spreadsheet_id, groups):
     report_rows = await run_sheets(
         "recovery Репорты lookup",
         lambda service: service.values().get(
