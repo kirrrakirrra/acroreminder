@@ -20,11 +20,27 @@ def load_scheduler(monkeypatch):
     monkeypatch.setenv("GROUP_ID_ADULT", "-100")
     for name in ("group_config", "reminder_handler", "scheduler_handler"):
         sys.modules.pop(name, None)
+    # Other legacy subscription modules still authenticate at import time; the
+    # reminder modules themselves now create no production client on import.
     with patch("google.oauth2.service_account.Credentials.from_service_account_file"), patch(
         "googleapiclient.discovery.build"
-    ) as build:
-        build.return_value.spreadsheets.return_value = Mock()
-        return importlib.import_module("scheduler_handler")
+    ):
+        handler = importlib.import_module("scheduler_handler")
+    reminder = sys.modules["reminder_handler"]
+    service = Mock()
+
+    async def run_sheets(_label, operation):
+        return operation(service)
+
+    def run_sheets_sync(_label, operation):
+        return operation(service)
+
+    for module in (handler, reminder):
+        monkeypatch.setattr(module, "_run_sheets", run_sheets)
+        monkeypatch.setattr(module, "_timed_sheets", run_sheets_sync)
+        # Convenient test handle; production has no eagerly-created client.
+        module.sheets_service = service
+    return handler
 
 
 def update(user_id, data=None):
@@ -179,6 +195,48 @@ def test_announcement_failure_is_reported_without_poll(monkeypatch):
     message = callback.callback_query.edit_message_text.await_args.args[0]
     assert "Не удалось отправить напоминание" in message
     assert "отправлены ✅" not in message
+
+
+def test_progress_is_shown_after_poll_before_slow_persistence(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    sheet_rows(handler, [])
+    started = asyncio.Event()
+    release = asyncio.Event()
+    original_run = handler._run_sheets
+
+    async def slow_run(label, operation):
+        if "Репорты persistence" in label:
+            started.set()
+            await release.wait()
+        return await original_run(label, operation)
+
+    monkeypatch.setattr(handler, "_run_sheets", slow_run)
+    callback = update(1, "yes|0|2026-09-08")
+    ctx = context()
+
+    async def scenario():
+        task = asyncio.create_task(handler.handle_callback(callback, ctx))
+        await started.wait()
+        assert callback.callback_query.edit_message_text.await_count == 1
+        progress = callback.callback_query.edit_message_text.await_args.args[0]
+        assert "Сохраняю данные" in progress
+        assert ctx.bot.send_poll.await_count == 1
+        release.set()
+        await task
+
+    asyncio.run(scenario())
+
+
+def test_report_marker_is_persisted_before_survey_metadata(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    values = sheet_rows(handler, [])
+    asyncio.run(handler.handle_callback(
+        update(1, "yes|0|2026-09-08"), context()
+    ))
+    ranges = [call.kwargs["range"] for call in values.append.call_args_list]
+    assert ranges.index("Репорты!A1") < ranges.index("Опросы!A:G")
 
 
 def test_poll_failure_reports_partial_delivery(monkeypatch):

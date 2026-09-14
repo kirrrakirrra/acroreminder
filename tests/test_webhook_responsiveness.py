@@ -32,7 +32,7 @@ def test_occurrence_lock_blocks_same_group_but_not_another(monkeypatch):
     release = asyncio.Event()
     deliveries = []
 
-    async def delivery(context_, group, lesson_date, replace=False):
+    async def delivery(context_, group, lesson_date, replace=False, on_poll_sent=None):
         deliveries.append(group["name"])
         if group is handler.groups[0]:
             entered.set()
@@ -57,6 +57,48 @@ def test_occurrence_lock_blocks_same_group_but_not_another(monkeypatch):
 
     asyncio.run(scenario())
     assert deliveries.count(handler.groups[0]["name"]) == 1
+
+
+def test_second_group_sends_poll_while_first_persists(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    sheet_rows(handler, [])
+    first_persistence = asyncio.Event()
+    release = asyncio.Event()
+    original_run = handler._run_sheets
+    persistence_calls = 0
+
+    async def slow_first_persistence(label, operation):
+        nonlocal persistence_calls
+        if label == "Репорты persistence":
+            persistence_calls += 1
+            if persistence_calls == 1:
+                first_persistence.set()
+                await release.wait()
+        return await original_run(label, operation)
+
+    monkeypatch.setattr(handler, "_run_sheets", slow_first_persistence)
+    first_context = context("poll-a")
+    second_context = context("poll-b")
+
+    async def scenario():
+        first = asyncio.create_task(handler.handle_callback(
+            update(1, "yes|0|2026-09-08"), first_context
+        ))
+        await first_persistence.wait()
+        second = asyncio.create_task(handler.handle_callback(
+            update(1, "yes|1|2026-09-08"), second_context
+        ))
+        for _ in range(20):
+            if second_context.bot.send_poll.await_count:
+                break
+            await asyncio.sleep(0)
+        second_context.bot.send_poll.assert_awaited_once()
+        assert not first.done()
+        release.set()
+        await asyncio.gather(first, second)
+
+    asyncio.run(scenario())
 
 
 def _load_main(monkeypatch):
@@ -97,11 +139,14 @@ def test_poll_answer_persistence_does_not_block_loop(monkeypatch):
     reminder = sys.modules["reminder_handler"]
     release = asyncio.Event()
 
-    def blocking(_label, operation):
+    def blocking():
         import time
         time.sleep(0.05)
 
-    monkeypatch.setattr(reminder, "_timed_sheets", blocking)
+    async def run_blocking(_label, operation):
+        await asyncio.to_thread(blocking)
+
+    monkeypatch.setattr(reminder, "_run_sheets", run_blocking)
     poll_update = SimpleNamespace(poll_answer=SimpleNamespace(
         poll_id="poll", option_ids=[0],
         user=SimpleNamespace(id=7, username="u", full_name="User"),

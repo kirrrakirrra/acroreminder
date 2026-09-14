@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import re
-import time
 from subscription_tools import parse_unpaid_payment
 from utils import now_local, format_now, notify_karina_action
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
@@ -34,39 +33,13 @@ DEFAULT_OPTIONS = [
     "❌ Пропускаем"
 ]
 
-# Google Sheets
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
+from sheets_runtime import run_sheets as _run_sheets, run_sheets_sync as _timed_sheets
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SURVEY_SHEET = 'Опросы'
 USERNAMES_SHEET = "usernames"
-
-# Kept as a legacy test seam only. Runtime worker operations use a newly built client.
-creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
-
-def create_sheets_service():
-    if not os.path.exists(SERVICE_ACCOUNT_FILE):  # test seam; production mounts this file
-        return sheets_service
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    )
-    return build('sheets', 'v4', credentials=credentials).spreadsheets()
-
-
-def _timed_sheets(label, operation):
-    started = time.monotonic()
-    try:
-        return operation(create_sheets_service())
-    finally:
-        logging.info("Sheets %s completed in %.3fs", label, time.monotonic() - started)
-
-
-async def _run_sheets(label, operation):
-    return await asyncio.to_thread(_timed_sheets, label, operation)
 
 # Обработчик голосов
 async def handle_poll_answer(update, context):

@@ -1,5 +1,3 @@
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from reminder_handler import poll_to_group, send_admin_report
@@ -17,7 +15,6 @@ from subscription_alerts import collect_alerts, render_digest_parts
 import asyncio
 import os
 import logging
-import time
 from collections import defaultdict
 from telegram.error import BadRequest, TelegramError
 
@@ -42,30 +39,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")  # переменная должна быть в Render Environment
 
-# Kept as a legacy test seam only. Runtime worker operations use a newly built client.
-creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-sheets_service = build('sheets', 'v4', credentials=creds).spreadsheets()
-
-def create_sheets_service():
-    """Create an isolated client; googleapiclient transports are not thread-safe."""
-    if not os.path.exists(SERVICE_ACCOUNT_FILE):  # test seam; production mounts this file
-        return sheets_service
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    )
-    return build('sheets', 'v4', credentials=credentials).spreadsheets()
-
-
-def _timed_sheets(label, operation):
-    started = time.monotonic()
-    try:
-        return operation(create_sheets_service())
-    finally:
-        logging.info("Sheets %s completed in %.3fs", label, time.monotonic() - started)
-
-
-async def _run_sheets(label, operation):
-    return await asyncio.to_thread(_timed_sheets, label, operation)
+from sheets_runtime import run_sheets as _run_sheets, run_sheets_sync as _timed_sheets
 
 
 occurrence_locks = defaultdict(asyncio.Lock)
@@ -150,8 +124,19 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]),
                 )
                 return
+            async def show_delivered_progress():
+                try:
+                    await query.edit_message_text(
+                        "Напоминание и опрос отправлены ✅\nСохраняю данные…"
+                    )
+                except TelegramError:
+                    # A stale/deleted trainer message must not prevent the durable
+                    # marker from being written after a successful group delivery.
+                    logging.exception("Could not show reminder persistence progress")
+
             result = await send_reminder_and_poll(
-                context, group, lesson_date, replace=action == "resend_reminder"
+                context, group, lesson_date, replace=action == "resend_reminder",
+                on_poll_sent=show_delivered_progress,
             )
         await query.edit_message_text(result.admin_message)
     elif action == "skip":
@@ -213,7 +198,9 @@ class DeliveryResult:
         self.admin_message = admin_message
 
 
-async def send_reminder_and_poll(context, group, lesson_date, replace=False):
+async def send_reminder_and_poll(
+    context, group, lesson_date, replace=False, on_poll_sent=None
+):
     """The single delivery path used by scheduled and manual confirmations."""
     occurrence = (group["name"], str(lesson_date))
     try:
@@ -262,27 +249,12 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
         )
 
     logging.info("✅ Опрос отправлен: %s/%s poll_id=%s", *occurrence, poll_msg.poll.id)
+    if on_poll_sent is not None:
+        await on_poll_sent()
     options_text = "|".join(opt.text for opt in poll_msg.poll.options)
     survey_row = [[
         poll_msg.poll.id, group["name"], "", "", format_now(), "", options_text,
     ]]
-    survey_persisted = False
-    for attempt in range(1, 4):
-        try:
-            await _run_sheets("Опросы persistence", lambda service: service.values().append(
-                spreadsheetId=SPREADSHEET_ID, range="Опросы!A:G",
-                valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
-                body={"values": survey_row},
-            ).execute())
-            survey_persisted = True
-            logging.info("✅ Опросы сохранены: %s/%s (попытка %d)", *occurrence, attempt)
-            break
-        except Exception as e:
-            logging.warning(
-                "❗ Ошибка сохранения Опросы %s/%s (попытка %d/3): %s",
-                *occurrence, attempt, e,
-            )
-
     context.bot_data[poll_msg.poll.id] = poll_msg.poll.options
     poll_to_group[poll_msg.poll.id] = group
     report_row = [[
@@ -333,6 +305,25 @@ async def send_reminder_and_poll(context, group, lesson_date, replace=False):
             "⚠️ Напоминание и опрос отправлены в Telegram, но сохранить состояние "
             "для отчёта и защиты от дублей не удалось. Не отправляйте их повторно.",
         )
+
+    # Репорты is the restart-safe delivery marker.  Only secondary poll metadata
+    # may be attempted after it has been durably established.
+    survey_persisted = False
+    for attempt in range(1, 4):
+        try:
+            await _run_sheets("Опросы persistence", lambda service: service.values().append(
+                spreadsheetId=SPREADSHEET_ID, range="Опросы!A:G",
+                valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+                body={"values": survey_row},
+            ).execute())
+            survey_persisted = True
+            logging.info("✅ Опросы сохранены: %s/%s (попытка %d)", *occurrence, attempt)
+            break
+        except Exception as e:
+            logging.warning(
+                "❗ Ошибка сохранения Опросы %s/%s (попытка %d/3): %s",
+                *occurrence, attempt, e,
+            )
 
     if not survey_persisted:
         logging.error(

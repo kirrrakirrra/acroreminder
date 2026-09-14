@@ -306,19 +306,19 @@ def test_loader_uses_one_batch_get_and_skips_blank_subscription_rows(monkeypatch
     execute = Mock(return_value=response)
     batch_get = Mock(return_value=SimpleNamespace(execute=execute))
     service = SimpleNamespace(values=lambda: SimpleNamespace(batchGet=batch_get))
-    factory = Mock(return_value=service)
-    monkeypatch.setattr(subscription_tools, "create_subscription_sheets_service", factory)
+    runtime = Mock(side_effect=lambda label, operation: operation(service))
+    monkeypatch.setattr(subscription_tools, "run_sheets_sync", runtime)
 
     result = subscription_tools.load_all_subscriptions(["Группы 4-5", "Группы 6-9"])
 
     assert [item["name"] for item in result] == ["Real"]
-    factory.assert_called_once_with()
+    runtime.assert_called_once()
     batch_get.assert_called_once()
     assert len(batch_get.call_args.kwargs["ranges"]) == 2
     execute.assert_called_once()
 
 
-def test_each_loader_invocation_creates_its_own_sheets_service(monkeypatch):
+def test_each_loader_invocation_uses_shared_sheets_runtime(monkeypatch):
     execute_one = Mock(return_value={"valueRanges": []})
     execute_two = Mock(return_value={"valueRanges": []})
     service_one = SimpleNamespace(values=lambda: SimpleNamespace(
@@ -327,12 +327,13 @@ def test_each_loader_invocation_creates_its_own_sheets_service(monkeypatch):
     service_two = SimpleNamespace(values=lambda: SimpleNamespace(
         batchGet=Mock(return_value=SimpleNamespace(execute=execute_two))
     ))
-    factory = Mock(side_effect=[service_one, service_two])
-    monkeypatch.setattr(subscription_tools, "create_subscription_sheets_service", factory)
+    services = iter([service_one, service_two])
+    runtime = Mock(side_effect=lambda label, operation: operation(next(services)))
+    monkeypatch.setattr(subscription_tools, "run_sheets_sync", runtime)
 
     subscription_tools.load_all_subscriptions(["Группы 4-5"])
     subscription_tools.load_all_subscriptions(["Группы 4-5"])
 
-    assert factory.call_count == 2
+    assert runtime.call_count == 2
     execute_one.assert_called_once_with()
     execute_two.assert_called_once_with()
