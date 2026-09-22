@@ -344,7 +344,7 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if not user_subscriptions:
         sent = await send_user_message(
-            "⚠️ У вас нет активных абонементов, или ваш username / user ID не добавлен в таблицу, пожалуйста, обратитесь к администратору.\n\n"
+            "⚠️ У вас нет активных абонементов в этой группе, или ваш username / user ID не добавлен в таблицу, пожалуйста, обратитесь к администратору.\n\n"
             "ℹ️ Чтобы узнать *информацию* о расписании, ценах и правилах — воспользуйтесь командой /info.",
             parse_mode="Markdown"
         )
