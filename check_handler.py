@@ -317,7 +317,10 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         all_subscriptions = await asyncio.to_thread(load_all_subscriptions, sheet_names)
     except Exception as e:
         logging.warning(f"❗ Ошибка при загрузке абонементов: {e}")
-        sent = await send_user_message("❌ Не удалось прочитать данные абонементов из таблицы.")
+        sent = await send_user_message(
+            "⚠️ Что-то пошло не так при проверке абонемента. "
+            "Пожалуйста, попробуйте ещё раз через минуту. "
+            "Если ошибка повторяется — обратитесь к администратору.")
         await notify_after_send(sent)
         return
     finally:
