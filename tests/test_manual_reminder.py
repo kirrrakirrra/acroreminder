@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytz
+from telegram.error import BadRequest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -43,10 +44,15 @@ def load_scheduler(monkeypatch):
     return handler
 
 
-def update(user_id, data=None):
+def update(user_id, data=None, message_id=None, chat_id=1):
     query = None
     if data is not None:
-        query = SimpleNamespace(data=data, answer=AsyncMock(), edit_message_text=AsyncMock())
+        message = None
+        if message_id is not None:
+            message = SimpleNamespace(message_id=message_id, chat_id=chat_id)
+        query = SimpleNamespace(
+            data=data, answer=AsyncMock(), edit_message_text=AsyncMock(), message=message,
+        )
     return SimpleNamespace(
         effective_user=SimpleNamespace(id=user_id),
         message=SimpleNamespace(reply_text=AsyncMock()),
@@ -167,6 +173,137 @@ def test_stale_yes_is_protected_and_scheduler_skips_durable_occurrence(monkeypat
     app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
     assert asyncio.run(handler.ask_admin(app, 0, handler.groups[0])) is False
     app.bot.send_message.assert_not_awaited()
+
+
+def test_fresh_two_group_prompts_deliver_without_second_duplicate_lookup(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    sheet_rows(handler, [])
+    duplicate_lookups = 0
+    first_report_started = asyncio.Event()
+    release_first_report = asyncio.Event()
+    original_run = handler._run_sheets
+
+    async def observed_run(label, operation):
+        nonlocal duplicate_lookups
+        if label == "reminder duplicate lookup":
+            duplicate_lookups += 1
+        if label == "Репорты persistence" and not first_report_started.is_set():
+            first_report_started.set()
+            await release_first_report.wait()
+        return await original_run(label, operation)
+
+    monkeypatch.setattr(handler, "_run_sheets", observed_run)
+    prompts = iter([
+        SimpleNamespace(message_id=101),
+        SimpleNamespace(message_id=102),
+    ])
+    app = SimpleNamespace(bot=SimpleNamespace(
+        send_message=AsyncMock(side_effect=lambda **_kwargs: next(prompts))
+    ))
+
+    async def scenario():
+        assert await handler.ask_admin(app, 0, handler.groups[0]) is True
+        assert await handler.ask_admin(app, 1, handler.groups[1]) is True
+        assert duplicate_lookups == 2
+
+        first_context = context("poll-a")
+        second_context = context("poll-b")
+        second_poll_sent = asyncio.Event()
+
+        async def send_second_poll(**_kwargs):
+            second_poll_sent.set()
+            return SimpleNamespace(poll=SimpleNamespace(
+                id="poll-b", options=[SimpleNamespace(text=x) for x in ("a", "b", "c")]
+            ))
+
+        second_context.bot.send_poll.side_effect = send_second_poll
+        first = asyncio.create_task(handler.handle_callback(
+            update(1, "yes|0|2026-09-08", 101), first_context
+        ))
+        await first_report_started.wait()
+        second = asyncio.create_task(handler.handle_callback(
+            update(1, "yes|1|2026-09-08", 102), second_context
+        ))
+        await asyncio.wait_for(second_poll_sent.wait(), timeout=1)
+
+        assert duplicate_lookups == 2
+        assert not first.done()
+        release_first_report.set()
+        await asyncio.gather(first, second)
+
+    asyncio.run(scenario())
+
+
+def test_stale_prompt_without_registry_checks_sheets_before_delivery(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    sheet_rows(handler, [])
+    calls = []
+    original_run = handler._run_sheets
+
+    async def observed_run(label, operation):
+        calls.append(label)
+        return await original_run(label, operation)
+
+    monkeypatch.setattr(handler, "_run_sheets", observed_run)
+    ctx = context()
+    asyncio.run(handler.handle_callback(
+        update(1, "yes|0|2026-09-08", 999), ctx
+    ))
+
+    assert calls.index("reminder duplicate lookup") < calls.index("Репорты duplicate lookup")
+    ctx.bot.send_poll.assert_awaited_once()
+
+
+def test_duplicate_fresh_prompt_callback_sends_only_one_poll(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    sheet_rows(handler, [])
+    app = SimpleNamespace(bot=SimpleNamespace(
+        send_message=AsyncMock(return_value=SimpleNamespace(message_id=101))
+    ))
+    ctx = context()
+
+    async def scenario():
+        assert await handler.ask_admin(app, 0, handler.groups[0]) is True
+        callback = "yes|0|2026-09-08"
+        await handler.handle_callback(update(1, callback, 101), ctx)
+        await handler.handle_callback(update(1, callback, 101), ctx)
+
+    asyncio.run(scenario())
+    ctx.bot.send_poll.assert_awaited_once()
+
+
+def test_final_already_applied_edit_does_not_fail_successful_delivery(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    sheet_rows(handler, [])
+    callback = update(1, "yes|0|2026-09-08")
+    callback.callback_query.edit_message_text.side_effect = [
+        None, BadRequest("Message is not modified: specified new message content")
+    ]
+
+    asyncio.run(handler.handle_callback(callback, context()))
+
+    assert callback.callback_query.edit_message_text.await_count == 2
+
+
+def test_fresh_prompt_registry_is_bounded(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    sheet_rows(handler, [])
+    monkeypatch.setattr(handler, "now_local", lambda: vn(2026, 9, 8, 11, 2))
+    message_ids = iter(range(handler.MAX_FRESH_CONFIRMATIONS + 1))
+    app = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(
+        side_effect=lambda **_kwargs: SimpleNamespace(message_id=next(message_ids))
+    )))
+
+    async def create_prompts():
+        for _ in range(handler.MAX_FRESH_CONFIRMATIONS + 1):
+            assert await handler.ask_admin(app, 0, handler.groups[0]) is True
+
+    asyncio.run(create_prompts())
+    assert len(handler.fresh_scheduler_confirmations) == handler.MAX_FRESH_CONFIRMATIONS
 
 
 def test_legacy_yes_without_date_is_stale(monkeypatch):

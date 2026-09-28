@@ -15,7 +15,7 @@ from subscription_alerts import collect_alerts, render_digest_parts
 import asyncio
 import os
 import logging
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from telegram.error import BadRequest, TelegramError
 
 # ------------------------------------------------------------------------------------
@@ -43,6 +43,20 @@ from sheets_runtime import run_sheets as _run_sheets, run_sheets_sync as _timed_
 
 
 occurrence_locks = defaultdict(asyncio.Lock)
+MAX_FRESH_CONFIRMATIONS = 128
+# Exact scheduler-created Telegram prompts whose durable duplicate check was
+# completed immediately before the message was sent.  OrderedDict keeps this
+# process-local optimization bounded; restart safety still comes from Sheets.
+fresh_scheduler_confirmations = OrderedDict()
+
+
+def _fresh_confirmation_marker(query, occurrence):
+    message = getattr(query, "message", None)
+    chat = getattr(message, "chat", None)
+    chat_id = getattr(message, "chat_id", None)
+    if chat_id is None:
+        chat_id = getattr(chat, "id", None)
+    return (chat_id, getattr(message, "message_id", None), *occurrence)
 
 # pending = {}
 
@@ -67,6 +81,11 @@ async def ask_admin(app, group_id, group):
         text=f"Занятие для {group['display_name']} {group['lesson_day_text']} в {group['time']} по расписанию?",
         reply_markup=get_decision_keyboard(group_id, lesson_date)
     )
+    marker = (ADMIN_ID, msg.message_id, group["name"], lesson_date)
+    fresh_scheduler_confirmations[marker] = True
+    fresh_scheduler_confirmations.move_to_end(marker)
+    while len(fresh_scheduler_confirmations) > MAX_FRESH_CONFIRMATIONS:
+        fresh_scheduler_confirmations.popitem(last=False)
     return True
    # pending[msg.message_id] = group
 
@@ -114,7 +133,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action in ("yes", "select_reminder", "resend_reminder"):
         occurrence = (group["name"], str(lesson_date))
         async with occurrence_locks[occurrence]:
-            if action in ("yes", "select_reminder") and await occurrence_was_sent_async(group, lesson_date):
+            marker = _fresh_confirmation_marker(query, occurrence)
+            is_fresh_scheduler_yes = (
+                action == "yes" and fresh_scheduler_confirmations.pop(marker, None) is not None
+            )
+            already_sent = occurrence in in_process_sent_occurrences
+            if action in ("yes", "select_reminder") and not already_sent and not is_fresh_scheduler_yes:
+                already_sent = await occurrence_was_sent_async(group, lesson_date)
+            if action in ("yes", "select_reminder") and already_sent:
                 await query.edit_message_text(
                     "⚠️ Напоминание и опрос для этого занятия уже отправлены. "
                     "Повторная отправка создаст ещё одно сообщение и опрос.",
@@ -138,8 +164,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context, group, lesson_date, replace=action == "resend_reminder",
                 on_poll_sent=show_delivered_progress,
             )
-        await query.edit_message_text(result.admin_message)
+        try:
+            await query.edit_message_text(result.admin_message)
+        except BadRequest as exc:
+            if "message is not modified" in str(exc).lower():
+                logging.info("Trainer delivery status was already up to date: %s", exc)
+            else:
+                raise
     elif action == "skip":
+        occurrence = (group["name"], str(lesson_date))
+        fresh_scheduler_confirmations.pop(
+            _fresh_confirmation_marker(query, occurrence), None
+        )
         await query.edit_message_text("❌ Окей, ничего не публикуем.\nНапоминание: не забудьте сами сообщить группе о деталях отмены")
 
 
