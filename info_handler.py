@@ -17,7 +17,7 @@ def get_info_keyboard():
 
 def get_group_choice_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👧 4–5 лет", callback_data="info|group_4_5")],
+        [InlineKeyboardButton("👧 4–6 лет", callback_data="info|group_4_5")],
         [InlineKeyboardButton("🤸 6–9 лет", callback_data="info|group_6_9")],
         [InlineKeyboardButton("🧔‍♂️ Взрослая группа", callback_data="info|group_adults")],
         [InlineKeyboardButton("🏠 Главное меню", callback_data="info|back")],
@@ -90,10 +90,10 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "schedule": (
             "📅 *Расписание групповых занятий:*\n"
             "────── ✦ ──────\n"
-            "[Телеграм чат Младших групп (4-5 лет)](https://t.me/+lpifqVvxT3YwZGU0)\n\n"
-            "👧 *Младшая группа (4–5 лет)*\n"
+            "[Телеграм чат Младших групп (4-6 лет)](https://t.me/+lpifqVvxT3YwZGU0)\n\n"
+            "👧 *Младшая группа (4–6 лет)*\n"
             "Вт / Чт — 17:15–18:15\n\n"
-            "👧 *NEW Младшая группа (4–5 лет)*\n"
+            "👧 *NEW Младшая группа (4–6 лет)*\n"
             "Вт / Чт — 18:30–19:30\n\n"
             "────── ✦ ──────\n"
             "[Телеграм чат Старших групп (6-9 лет)](https://t.me/+lZP99Tb65yljMDUy)\n\n"
@@ -114,7 +114,7 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Рядом:Scenia Bay, Shama book bakery, Marisan\n\n"
                 "🗺 [Открыть в Google Maps](https://maps.app.goo.gl/PzUYSZNyid4P2gwd7?g_st=com.google.maps.preview.copy)\n"
                 "📸 Фото фасада зала:\n" 
-                "↳[Чат 4-5 лет](https://t.me/c/3757833438/1/19)\n"
+                "↳[Чат 4-6 лет](https://t.me/c/3757833438/1/19)\n"
                 "↳[Чат 6-9 лет](https://t.me/c/1820363527/1/2747)\n"
                 "↳[Чат Взрослой группы](https://t.me/c/3963339870/8)"
         ),
@@ -192,7 +192,7 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• Педагогическое и психологическое образование\n"
         ),
         "group_4_5": (
-            "👧 *Группы 4–5 лет*\n"
+            "👧 *Группы 4–6 лет*\n"
             "────── ✦ ──────\n"
             "🗓 *Расписание:*\n\n"
             "Вт / Чт — 17:15–18:15\n"
