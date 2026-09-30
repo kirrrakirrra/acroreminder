@@ -99,6 +99,26 @@ def test_primary_alert_card_also_shows_current_unpaid_context_once():
     assert unpaid.count("💳 <b>Оплата:</b> ⚠️ не оплачено 400") == 1
 
 
+def test_finished_and_expired_cards_show_renewal_instruction_without_situation_label():
+    item = subscription()
+    instruction = "Необходимо оплатить новый абонемент, чтобы сохранить место в группе."
+
+    finished = build_trainer_alert_card(item, "finished")
+    expired = build_trainer_alert_card(item, "expired")
+
+    assert f"Лимит занятий использован. {instruction}" in finished
+    assert f"Срок действия уже истёк. {instruction}" in expired
+    assert "Ситуация:" not in finished
+    assert "Ситуация:" not in expired
+
+
+def test_other_alert_explanation_renders_without_situation_label():
+    card = build_trainer_alert_card(subscription(), "last_lesson")
+
+    assert "По лимиту абонемента осталось одно занятие." in card
+    assert "Ситуация:" not in card
+
+
 def test_moved_row_resolves_only_by_unique_fingerprint_and_reused_hint_is_safe():
     original = subscription("Анна", 3)
     moved = subscription("Анна", 9)
