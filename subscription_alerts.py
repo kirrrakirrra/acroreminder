@@ -26,8 +26,8 @@ ALERT_TITLES = {
     "unpaid": "💳 Неоплаченные абонементы",
 }
 ALERT_EXPLANATIONS = {
-    "expired": "Срок действия уже истёк. Нужен следующий абонемент.",
-    "finished": "Лимит занятий использован. Нужен следующий абонемент.",
+    "expired": "Срок действия уже истёк. Необходимо оплатить новый абонемент, чтобы сохранить место в группе.",
+    "finished": "Лимит занятий использован. Необходимо оплатить новый абонемент, чтобы сохранить место в группе.",
     "no_calendar_lessons": "По расписанию в срок абонемента больше не входит занятий.",
     "last_calendar_lesson_today": "Сегодня последнее занятие в сроке абонемента.",
     "last_calendar_lesson": "По расписанию в срок абонемента входит ещё одно занятие.",
@@ -233,7 +233,7 @@ def build_trainer_alert_card(subscription: Dict, alert_type: str) -> str:
         f"☑️ <b>Использовано:</b> {html.escape(format_usage(subscription))}",
         f"📅 <b>Даты посещений:</b>\n{dates}",
     ]
-    lines.append(f"\n<b>Ситуация:</b> {html.escape(ALERT_EXPLANATIONS[alert_type])}")
+    lines.append(f"\n{html.escape(ALERT_EXPLANATIONS[alert_type])}")
     if alert_type == "warning_7" and subscription.get("days_until_end"):
         lines.append(f"⏳ Осталось дней: {html.escape(str(subscription['days_until_end']))}")
     unpaid_status = parse_unpaid_payment(subscription.get("deposit"))
