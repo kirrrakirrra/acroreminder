@@ -12,7 +12,8 @@ def get_info_keyboard():
         [InlineKeyboardButton("📍 Как найти зал", callback_data="info|location")],
         [InlineKeyboardButton("🧦 Подготовка к занятиям", callback_data="info|rules")],
         [InlineKeyboardButton("🎯 Индивидуальные тренировки", callback_data="info|personal")],
-        [InlineKeyboardButton("🤸🏻‍♂️ Про тренера", callback_data="info|coaches")],
+        # Временно скрыто; раскомментируйте строку ниже, чтобы вернуть кнопку.
+        # [InlineKeyboardButton("🤸🏻‍♂️ Про тренера", callback_data="info|coaches")],
     ])
 
 def get_group_choice_keyboard():
