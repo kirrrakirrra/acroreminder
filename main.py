@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import time
 from collections import deque
 import nest_asyncio
 from aiohttp import web
@@ -47,6 +48,9 @@ class WebhookUpdateProcessor:
         self.recent_ids = set()
         self.recent_order = deque()
         self.active_tasks = set()
+        self.action_active = set()
+        self.action_recent = {}
+        self.action_cooldown_seconds = 2.0
 
     def _accept(self, update_id):
         if update_id in self.recent_ids:
@@ -56,6 +60,31 @@ class WebhookUpdateProcessor:
         while len(self.recent_order) > self.cache_limit:
             self.recent_ids.discard(self.recent_order.popleft())
         return True
+
+    def _action_key(self, update):
+        """Treat separate rapid Telegram updates as the same user action."""
+        user = getattr(update, "effective_user", None)
+        chat = getattr(update, "effective_chat", None)
+        if user is None or chat is None:
+            return None
+        message = getattr(update, "message", None)
+        if message and isinstance(getattr(message, "text", None), str):
+            command = message.text.split(maxsplit=1)[0].split("@", 1)[0].lower()
+            if command in {"/start", "/check", "/info", "/report", "/expired", "/send_reminder"}:
+                # Different arguments are different actions.
+                return (chat.id, user.id, "command", message.text.strip())
+        query = getattr(update, "callback_query", None)
+        if query and getattr(query, "data", None):
+            origin = getattr(query, "message", None)
+            return (chat.id, user.id, "callback", getattr(origin, "message_id", None), query.data)
+        return None
+
+    async def _process_action(self, update, key):
+        try:
+            await self.app.process_update(update)
+        finally:
+            if key is not None:
+                self.action_active.discard(key)
 
     def _finished(self, task):
         self.active_tasks.discard(task)
@@ -76,8 +105,25 @@ class WebhookUpdateProcessor:
             return web.Response(status=400)
 
         if self._accept(update.update_id):
+            key = self._action_key(update)
+            now = time.monotonic()
+            # Bound the cache even when the bot runs for weeks.
+            if len(self.action_recent) > RECENT_UPDATE_LIMIT:
+                self.action_recent = {
+                    action: timestamp for action, timestamp in self.action_recent.items()
+                    if now - timestamp < self.action_cooldown_seconds
+                }
+            if key is not None and (
+                key in self.action_active
+                or now - self.action_recent.get(key, float("-inf")) < self.action_cooldown_seconds
+            ):
+                logging.info("Ignoring rapid duplicate Telegram action update_id=%s", update.update_id)
+                return web.Response(status=200)
+            if key is not None:
+                self.action_active.add(key)
+                self.action_recent[key] = now
             task = asyncio.create_task(
-                self.app.process_update(update), name=f"telegram-update-{update.update_id}"
+                self._process_action(update, key), name=f"telegram-update-{update.update_id}"
             )
             self.active_tasks.add(task)
             task.add_done_callback(self._finished)
