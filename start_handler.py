@@ -46,6 +46,12 @@ async def save_user_if_new(user_id: int, username: str, full_name: str):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     payload = context.args[0] if getattr(context, "args", None) else ""
+    if payload == "check":
+        # Telegram deep links open the private bot with /start check.
+        # Reuse the same all-groups lookup as the regular /check command.
+        from check_handler import check_subscriptions
+        await check_subscriptions(update, context)
+        return
     if payload.startswith("sa1_"):
         unavailable = "Карточка недоступна или ситуация уже изменилась."
         parsed = parse_alert_payload(payload)
