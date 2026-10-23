@@ -295,7 +295,7 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         progress_message = await context.bot.send_message(
             chat_id=chat_id,
             message_thread_id=thread_id,
-            text="⏳ Собираю информацию об абонементах…",
+            text="⏳ Собираю информацию…",
         )
     except Exception:
         logging.warning("/check progress message failed", exc_info=True)
