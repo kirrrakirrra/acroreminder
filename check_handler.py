@@ -288,7 +288,37 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
         chat_id, thread_id, lookup_scope,
     )
 
+    # Keep one progress message in the same chat/topic, then replace it with
+    # the first real result. Additional subscriptions remain separate messages.
+    progress_message = None
+    try:
+        progress_message = await context.bot.send_message(
+            chat_id=chat_id,
+            message_thread_id=thread_id,
+            text="⏳ Собираю информацию об абонементах…",
+        )
+    except Exception:
+        logging.warning("/check progress message failed", exc_info=True)
+
     async def send_user_message(text: str, **kwargs) -> bool:
+        nonlocal progress_message
+        if progress_message is not None:
+            pending = progress_message
+            progress_message = None
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=pending.message_id,
+                    text=text,
+                    **kwargs,
+                )
+                return True
+            except Exception:
+                logging.warning("/check progress edit failed; sending reply", exc_info=True)
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=pending.message_id)
+                except Exception:
+                    logging.debug("/check could not remove stale progress message", exc_info=True)
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
