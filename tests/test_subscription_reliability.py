@@ -113,7 +113,7 @@ def test_blank_and_drop_in_are_excluded_from_check(monkeypatch):
 
     context = run_check(handler, make_update(7))
 
-    assert "нет активных абонементов" in context.bot.send_message.call_args.kwargs["text"]
+    assert "абонементы не найдены" in context.bot.send_message.call_args.kwargs["text"]
 
 
 def test_known_group_with_successful_empty_load_gets_no_subscription_message(monkeypatch):
@@ -125,7 +125,7 @@ def test_known_group_with_successful_empty_load_gets_no_subscription_message(mon
     context = run_check(handler, make_update(-100, "supergroup"))
 
     assert loader.call_args.args == (["Взрослая группа"],)
-    assert "нет активных абонементов" in context.bot.send_message.call_args.kwargs["text"]
+    assert "В этой группе у вас не найден абонемент" in context.bot.send_message.call_args.kwargs["text"]
     assert "Таблица пуста" not in context.bot.send_message.call_args.kwargs["text"]
 
 
@@ -337,3 +337,32 @@ def test_each_loader_invocation_uses_shared_sheets_runtime(monkeypatch):
     assert runtime.call_count == 2
     execute_one.assert_called_once_with()
     execute_two.assert_called_once_with()
+
+
+def test_group_empty_state_has_private_check_deep_link(monkeypatch):
+    handler = import_check_handler(monkeypatch)
+    loader = Mock(return_value=[])
+    monkeypatch.setattr(handler, "load_all_subscriptions", loader)
+    monkeypatch.setattr(handler, "notify_karina_action", AsyncMock())
+    context = SimpleNamespace(bot=SimpleNamespace(
+        username="ExampleAcroBot", send_message=AsyncMock()
+    ))
+    asyncio.run(handler.check_subscriptions(make_update(-45, "supergroup"), context))
+    # Progress send may fail to expose message ID in mocks; inspect the final send.
+    kwargs = context.bot.send_message.await_args.kwargs
+    assert "В этой группе" in kwargs["text"]
+    assert kwargs["reply_markup"].inline_keyboard[0][0].url == "https://t.me/ExampleAcroBot?start=check"
+    assert loader.call_count == 1
+
+
+def test_unknown_group_does_not_claim_a_group_scoped_lookup(monkeypatch):
+    handler = import_check_handler(monkeypatch)
+    monkeypatch.setattr(handler, "load_all_subscriptions", Mock(return_value=[]))
+    monkeypatch.setattr(handler, "notify_karina_action", AsyncMock())
+    context = SimpleNamespace(bot=SimpleNamespace(
+        username="ExampleAcroBot", send_message=AsyncMock()
+    ))
+    asyncio.run(handler.check_subscriptions(make_update(-999, "supergroup"), context))
+    kwargs = context.bot.send_message.await_args.kwargs
+    assert "По вашему Telegram-аккаунту" in kwargs["text"]
+    assert "reply_markup" not in kwargs
