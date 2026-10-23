@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import os
 import asyncio
@@ -376,10 +376,31 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
     if not user_subscriptions:
+        is_group_check = (getattr(chat, "type", None) in {"group", "supergroup"}
+                          and len(sheet_names) == 1)
+        if is_group_check:
+            explanation = (
+                "ℹ️ В этой группе у вас не найден абонемент.\n"
+                "Попробуйте проверить все свои абонементы в личном чате с ботом."
+            )
+        else:
+            explanation = (
+                "⚠️ По вашему Telegram-аккаунту абонементы не найдены.\n"
+                "Если вы занимаетесь в студии, попросите тренера проверить привязку."
+            )
+
+        username = getattr(context.bot, "username", None)
+        keyboard = None
+        if is_group_check and username:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton(
+                    "🔎 Проверить все абонементы",
+                    url=f"https://t.me/{username}?start=check",
+                )
+            ]])
         sent = await send_user_message(
-            "⚠️ *У вас нет активных абонементов в этой группе*, или ваш username / user ID не добавлен в таблицу, пожалуйста, обратитесь к администратору.\n\n"
-            "ℹ️ Чтобы узнать *информацию* о расписании, ценах и правилах — воспользуйтесь командой /info.",
-            parse_mode="Markdown"
+            explanation,
+            **({"reply_markup": keyboard} if keyboard else {}),
         )
         await notify_after_send(sent)
         return
