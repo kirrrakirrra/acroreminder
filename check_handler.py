@@ -376,7 +376,8 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
     if not user_subscriptions:
-        is_group_check = getattr(chat, "type", None) in {"group", "supergroup"}
+        is_group_check = (getattr(chat, "type", None) in {"group", "supergroup"}
+                          and len(sheet_names) == 1)
         if is_group_check:
             explanation = (
                 "ℹ️ В этой группе у вас не найден абонемент.\n"
