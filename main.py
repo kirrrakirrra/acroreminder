@@ -67,7 +67,7 @@ class WebhookUpdateProcessor:
         if user is None or chat is None:
             return None
         message = getattr(update, "message", None)
-        if message and isinstance(getattr(message, "text", None), str):
+        if message and isinstance(getattr(message, "text", None), str) and message.text.strip():
             command = message.text.split(maxsplit=1)[0].split("@", 1)[0].lower()
             if command in {"/start", "/check", "/info", "/report", "/expired", "/send_reminder"}:
                 return (chat.id, user.id, "command", message.text.strip())
