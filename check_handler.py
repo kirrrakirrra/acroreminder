@@ -376,48 +376,21 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
     if not user_subscriptions:
-        # A group-only lookup cannot establish whether this person has passes
-        # elsewhere. Load all sheets only on the no-match path.
-        other_subscriptions = []
-        if len(sheet_names) == 1:
-            try:
-                all_school_subscriptions = await asyncio.to_thread(load_all_subscriptions)
-                other_subscriptions = find_user_subscriptions(
-                    all_subscriptions=all_school_subscriptions,
-                    telegram_user_id=user_id,
-                    telegram_username=raw_username,
-                )
-                other_subscriptions = [
-                    sub for sub in other_subscriptions
-                    if sub.get("subscription_type") not in {"", None, "drop_in"}
-                ]
-            except Exception:
-                logging.exception("/check all-school fallback lookup failed")
-                # Do not claim the person is unlinked when the lookup failed.
-                other_subscriptions = None
-
-        if other_subscriptions:
+        is_group_check = getattr(chat, "type", None) in {"group", "supergroup"}
+        if is_group_check:
             explanation = (
-                "ℹ️ *В этой группе абонемент не найден.*\\n"
-                "У вас есть абонемент в другой группе. "
-                "Откройте личный чат с ботом, чтобы посмотреть все свои абонементы."
-            )
-        elif other_subscriptions is None:
-            explanation = (
-                "ℹ️ *В этой группе абонемент не найден.*\\n"
-                "Не удалось проверить остальные группы. "
-                "Попробуйте посмотреть свои абонементы в личном чате с ботом."
+                "ℹ️ В этой группе у вас не найден абонемент.\n"
+                "Попробуйте проверить все свои абонементы в личном чате с ботом."
             )
         else:
             explanation = (
-                "⚠️ *По вашему Telegram-аккаунту абонементы не найдены.*\\n"
-                "Возможно, ваш Telegram ID или username не указан в таблице. "
-                "Если вы занимаетесь в студии, обратитесь к тренеру для проверки привязки."
+                "⚠️ По вашему Telegram-аккаунту абонементы не найдены.\n"
+                "Если вы занимаетесь в студии, попросите тренера проверить привязку."
             )
 
         username = getattr(context.bot, "username", None)
         keyboard = None
-        if username:
+        if is_group_check and username:
             keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton(
                     "🔎 Проверить все абонементы",
@@ -425,8 +398,7 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
             ]])
         sent = await send_user_message(
-            explanation.replace("\\\\n", "\\n"),
-            parse_mode="Markdown",
+            explanation,
             **({"reply_markup": keyboard} if keyboard else {}),
         )
         await notify_after_send(sent)
