@@ -87,7 +87,7 @@ def test_group_check_loads_only_matching_sheet_and_sends_before_admin(monkeypatc
     assert context.bot.send_message.call_args.kwargs["text"] == "⏳ Собираю информацию…"
     context.bot.edit_message_text.assert_awaited_once()
     assert context.bot.edit_message_text.call_args.kwargs["message_id"] == 456
-    assert "Имя:" in context.bot.edit_message_text.call_args.kwargs["text"]
+    assert "*Имя:*" in context.bot.edit_message_text.call_args.kwargs["text"]
     update.message.reply_text.assert_not_awaited()
 
 
