@@ -77,3 +77,87 @@ def test_duplicate_callback_is_acknowledged(monkeypatch):
             await asyncio.gather(*processor.active_tasks)
 
     asyncio.run(scenario())
+
+
+def test_addressed_and_plain_check_share_action_key(monkeypatch):
+    main = _load_main(monkeypatch)
+    app = SimpleNamespace(bot=Mock(), process_update=AsyncMock())
+    processor = main.WebhookUpdateProcessor(app)
+
+    def command(text):
+        return SimpleNamespace(
+            effective_user=SimpleNamespace(id=7),
+            effective_chat=SimpleNamespace(id=-100),
+            message=SimpleNamespace(text=text),
+            callback_query=None,
+        )
+
+    assert processor._action_key(command("/check")) == processor._action_key(
+        command("/check@Acro_reminder_bot")
+    )
+    assert processor._action_key(command("/check anything")) != processor._action_key(
+        command("/check")
+    )
+
+
+def test_addressed_duplicate_during_slow_check_is_ignored_and_later_retry_allowed(monkeypatch):
+    main = _load_main(monkeypatch)
+    clock = [100.0]
+    monkeypatch.setattr(main.time, "monotonic", lambda: clock[0])
+    started = asyncio.Event()
+    finish = asyncio.Event()
+    calls = []
+
+    async def process(update):
+        calls.append(update.update_id)
+        if update.update_id == 100:
+            started.set()
+            await finish.wait()
+
+    app = SimpleNamespace(bot=Mock(), process_update=AsyncMock(side_effect=process))
+    processor = main.WebhookUpdateProcessor(app)
+
+    def make_update(data, _bot):
+        return SimpleNamespace(
+            update_id=data["update_id"],
+            effective_user=SimpleNamespace(id=7),
+            effective_chat=SimpleNamespace(id=-100),
+            message=SimpleNamespace(text=data["text"]),
+            callback_query=None,
+        )
+
+    async def scenario():
+        request = SimpleNamespace(json=AsyncMock(return_value={
+            "update_id": 100, "text": "/check"
+        }))
+        with patch.object(main.Update, "de_json", side_effect=make_update):
+            await processor.handle(request)
+            await started.wait()
+
+            # Simulated 22 seconds after the first request, still active.
+            clock[0] = 122.0
+            request.json.return_value = {
+                "update_id": 101, "text": "/check@Acro_reminder_bot"
+            }
+            await processor.handle(request)
+            assert calls == [100]
+            assert not finish.is_set()
+
+            clock[0] = 150.0
+            finish.set()
+            await asyncio.gather(*processor.active_tasks)
+            assert calls == [100]
+
+            # Within the two-second completion cooldown, still suppressed.
+            request.json.return_value = {"update_id": 102, "text": "/check"}
+            await processor.handle(request)
+            assert calls == [100]
+
+            # Later intentional repeat is accepted.
+            clock[0] = 153.0
+            request.json.return_value = {"update_id": 103, "text": "/check"}
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert calls == [100, 103]
+
+    asyncio.run(scenario())

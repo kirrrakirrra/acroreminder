@@ -66,15 +66,28 @@ def test_group_check_loads_only_matching_sheet_and_sends_before_admin(monkeypatc
     notify = AsyncMock(side_effect=lambda *args: events.append("admin"))
     monkeypatch.setattr(handler, "notify_karina_action", notify)
     update = make_update(-45, "supergroup", 123)
+    async def send_progress(**kwargs):
+        events.append("progress")
+        return SimpleNamespace(message_id=456)
+
+    async def edit_result(**kwargs):
+        events.append("result")
+
     context = SimpleNamespace(bot=SimpleNamespace(
-        send_message=AsyncMock(side_effect=lambda **kwargs: events.append("user"))
+        send_message=AsyncMock(side_effect=send_progress),
+        edit_message_text=AsyncMock(side_effect=edit_result),
     ))
 
     asyncio.run(handler.check_subscriptions(update, context))
 
     assert loader.call_args.args == (["Группы 4-5"],)
-    assert events == ["user", "admin"]
+    assert events == ["progress", "result", "admin"]
+    context.bot.send_message.assert_awaited_once()
     assert context.bot.send_message.call_args.kwargs["message_thread_id"] == 123
+    assert context.bot.send_message.call_args.kwargs["text"] == "⏳ Собираю информацию…"
+    context.bot.edit_message_text.assert_awaited_once()
+    assert context.bot.edit_message_text.call_args.kwargs["message_id"] == 456
+    assert "*Имя:*" in context.bot.edit_message_text.call_args.kwargs["text"]
     update.message.reply_text.assert_not_awaited()
 
 

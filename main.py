@@ -70,7 +70,7 @@ class WebhookUpdateProcessor:
         if message and isinstance(getattr(message, "text", None), str) and message.text.strip():
             command = message.text.split(maxsplit=1)[0].split("@", 1)[0].lower()
             if command in {"/start", "/check", "/info", "/report", "/expired", "/send_reminder"}:
-                return (chat.id, user.id, "command", message.text.strip())
+                return (chat.id, user.id, "command", command, message.text.partition(" ")[2].strip())
         query = getattr(update, "callback_query", None)
         if query and getattr(query, "data", None):
             origin = getattr(query, "message", None)
