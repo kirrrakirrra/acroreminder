@@ -77,3 +77,24 @@ def test_duplicate_callback_is_acknowledged(monkeypatch):
             await asyncio.gather(*processor.active_tasks)
 
     asyncio.run(scenario())
+
+
+def test_addressed_and_plain_check_share_action_key(monkeypatch):
+    main = _load_main(monkeypatch)
+    app = SimpleNamespace(bot=Mock(), process_update=AsyncMock())
+    processor = main.WebhookUpdateProcessor(app)
+
+    def command(text):
+        return SimpleNamespace(
+            effective_user=SimpleNamespace(id=7),
+            effective_chat=SimpleNamespace(id=-100),
+            message=SimpleNamespace(text=text),
+            callback_query=None,
+        )
+
+    assert processor._action_key(command("/check")) == processor._action_key(
+        command("/check@Acro_reminder_bot")
+    )
+    assert processor._action_key(command("/check anything")) != processor._action_key(
+        command("/check")
+    )
