@@ -256,3 +256,27 @@ def test_button_labels_show_vote_and_subscription_within_phone_friendly_limit():
     assert "Дима" in labels[0] and "закончен" in labels[0] and "❌" in labels[0]
     assert "Аня" in labels[1] and "∞" in labels[1] and "✅" in labels[1]
     assert "Лиза" in labels[2] and "разово" in labels[2]
+
+
+def test_real_usernames_id_columns_and_adult_repeated_section_headers():
+    group = dict(lists.GROUPS[-1])
+    roster = [
+        COLUMNS,
+        student("Имя", group="Группа", sub="Абонемент"),
+        student("Света", group="Взрослая группа", username=""),
+    ]
+    reports = [["poll-adult", group["name"], "", "", "", "", "2026-11-10"]]
+    surveys = [["poll-adult", group["name"], "777", "", "",
+                "Parent", "✅ Будем по абонементу"]]
+    usernames = [
+        ["Отчет", "Группа", "имя", "username1", "username2", "Weekdays",
+         "user ID1", "user ID2", "Имя Родителя1", "Имя Родителя2",
+         "Пауза", "Проголосовали сегодня", "тех группа", "Депозит"],
+        ["", "", "Света", "", "", "", "", "777", "", "", "", "",
+         group["name"], ""],
+    ]
+    state = lists.build_lesson_snapshot(
+        group, date(2026, 11, 10), roster, reports, surveys, usernames,
+    )
+    assert [row["name"] for row in state["rows"]] == ["Света"]
+    assert state["rows"][0]["vote"] == "✅ будет"
