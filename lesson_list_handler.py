@@ -107,6 +107,8 @@ def subscription_badge(row, columns, lesson_date):
         if warning == "no_calendar_lessons":
             return "⚠️ нет занятий до конца"
         if calendar_exhausted:
+            if end_date is not None and end_date.date() == lesson_date:
+                return "⚠️ последнее занятие"
             return "⚠️ нет занятий после сегодняшнего"
         detail = f"🎟 {used}/{limit}" if used is not None and limit else f"🎟 {raw}"
         if left is not None:
