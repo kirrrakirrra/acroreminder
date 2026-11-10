@@ -79,6 +79,9 @@ def test_expiry_on_last_day_is_still_valid_and_difference_alone_does_not_expire(
     exhausted_calendar = student("Лена", sub="безлимит", used="8", unused="",
                                  calendar="0", difference="0")
     assert "закончен" in lists.subscription_badge(exhausted_calendar, c, date(2026, 11, 9))
+    end_today = student("Лена", sub="безлимит", used="8", unused="",
+                        end="09.11.2026", calendar="0", difference="0")
+    assert "последний день" in lists.subscription_badge(end_today, c, date(2026, 11, 9))
 
 
 def test_old_poll_not_reused_for_new_lesson():
