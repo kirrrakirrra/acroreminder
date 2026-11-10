@@ -280,3 +280,9 @@ def test_real_usernames_id_columns_and_adult_repeated_section_headers():
     )
     assert [row["name"] for row in state["rows"]] == ["Света"]
     assert state["rows"][0]["vote"] == "✅ будет"
+
+
+def test_unknown_subscription_cell_content_is_not_presented_as_real_pass():
+    columns = lists._header(COLUMNS)
+    note_row = student("Соня", sub="18.06 не будет 10 дней")
+    assert lists.subscription_badge(note_row, columns, date(2026, 11, 9)) == "ℹ️ уточнить абон."
