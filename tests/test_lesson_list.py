@@ -286,3 +286,25 @@ def test_unknown_subscription_cell_content_is_not_presented_as_real_pass():
     columns = lists._header(COLUMNS)
     note_row = student("Соня", sub="18.06 не будет 10 дней")
     assert lists.subscription_badge(note_row, columns, date(2026, 11, 9)) == "ℹ️ уточнить абон."
+
+
+def test_more_than_twelve_students_can_be_paginated_without_changing_export_order():
+    group = dict(lists.GROUPS[2])
+    roster = [COLUMNS] + [
+        student(f"Ученик {i:02d}", user_id=str(100 + i))
+        for i in range(1, 19)
+    ]
+    state = lists.build_lesson_snapshot(
+        group, date(2026, 11, 9), roster, [], [], [],
+    )
+    assert len(state["rows"]) == 18
+    _, first_markup = lists._render(state)
+    assert any("Далее" in button.text for row in first_markup.inline_keyboard for button in row)
+    state["page"] = 1
+    _, second_markup = lists._render(state)
+    assert "Ученик 13" in second_markup.inline_keyboard[0][0].text
+    assert any("Назад" in button.text for row in second_markup.inline_keyboard for button in row)
+    state["rows"][13]["selected"] = True
+    state["rows"][1]["selected"] = True
+    exported = lists._export(state)
+    assert exported.index("1. Ученик 02") < exported.index("2. Ученик 14")
