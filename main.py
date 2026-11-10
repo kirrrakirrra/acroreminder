@@ -12,6 +12,7 @@ from start_handler import get_start_handler
 from check_handler import check_subscriptions, expired_command
 from info_handler import info_command, info_callback
 from report_handler import report_command
+from lesson_list_handler import list_command, list_callback
 from reminder_handler import handle_poll_answer, restore_poll_to_group, refresh_report_callback, notify_parents_callback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
@@ -69,7 +70,7 @@ class WebhookUpdateProcessor:
         message = getattr(update, "message", None)
         if message and isinstance(getattr(message, "text", None), str) and message.text.strip():
             command = message.text.split(maxsplit=1)[0].split("@", 1)[0].lower()
-            if command in {"/start", "/check", "/info", "/report", "/expired", "/send_reminder"}:
+            if command in {"/start", "/check", "/info", "/report", "/expired", "/send_reminder", "/list"}:
                 return (chat.id, user.id, "command", command, message.text.partition(" ")[2].strip())
         query = getattr(update, "callback_query", None)
         if query and getattr(query, "data", None):
@@ -165,6 +166,8 @@ async def main():
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CommandHandler("report", report_command))
     app.add_handler(CommandHandler("send_reminder", send_reminder_command))
+    app.add_handler(CommandHandler("list", list_command))
+    app.add_handler(CallbackQueryHandler(list_callback, pattern=r"^al:"))
     app.add_handler(CallbackQueryHandler(handle_callback, pattern=r"^(yes|skip|select_reminder|resend_reminder|cancel_reminder)(?:\||$)"))
     app.add_handler(CallbackQueryHandler(info_callback, pattern=r"^info\|"))
     app.add_handler(CallbackQueryHandler(refresh_report_callback, pattern=r"^refresh_report\|"))
