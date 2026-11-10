@@ -304,8 +304,17 @@ def _render(session):
     for index in range(start, end):
         row = rows[index]
         checkbox = "✅" if row["selected"] else "☐"
-        label = f"{checkbox} {row['name'][:35]} · {row['vote']} · {row['status']}"
-        keyboard.append([InlineKeyboardButton(label[:110], callback_data=f"al:t:{session['id']}:{index}")])
+        vote_icon = row["vote"].split()[0]
+        status = row["status"].replace(
+            "⚠️ нет занятий после сегодняшнего", "⚠️ после сегодня 0 зан."
+        ).replace(
+            "⚠️ безлимит: нет занятий до конца", "⚠️ ∞: нет занятий"
+        ).replace(
+            "⚠️ безлимит: последнее занятие", "⚠️ ∞: посл. занятие"
+        )
+        prefix = f"{checkbox} {row['name'][:22]} {vote_icon} · "
+        label = prefix + status[:max(0, 64 - len(prefix))]
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"al:t:{session['id']}:{index}")])
     paging = []
     if start:
         paging.append(InlineKeyboardButton("◀️ Назад", callback_data=f"al:p:{session['id']}:{page-1}"))
