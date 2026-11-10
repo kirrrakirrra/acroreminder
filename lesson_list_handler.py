@@ -9,6 +9,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from group_config import GROUPS
 from sheets_runtime import run_sheets
 from subscription_tools import normalize_subscription_type, parse_date
+from report_rows import _poll_creation_timestamp
 from utils import now_local
 
 SHEET_ID = os.getenv("SPREADSHEET_ID")
@@ -77,12 +78,16 @@ def subscription_badge(row, columns, lesson_date):
     calendar_exhausted = calendar_left == 0 and difference is not None and difference <= 0
 
     if kind == "unlimited":
-        if expired or warning == "no_calendar_lessons":
+        if expired:
             return "⛔ безлимит закончен"
+        if warning == "last_calendar_lesson_today":
+            return "⚠️ безлимит: последнее занятие"
+        if warning == "no_calendar_lessons":
+            return "⚠️ безлимит: нет занятий до конца"
         if calendar_exhausted:
             if end_date is not None and end_date.date() == lesson_date:
                 return "⚠️ безлимит: последний день"
-            return "⛔ нет занятий до конца"
+            return "⚠️ нет занятий после сегодняшнего"
         if calendar_left is not None:
             detail = f"∞ · {calendar_left} зан. до конца"
         else:
@@ -97,10 +102,12 @@ def subscription_badge(row, columns, lesson_date):
             left = limit - used
         if expired or (left is not None and left <= 0):
             return "⛔ абон. закончен"
-        if warning == "no_calendar_lessons" or calendar_exhausted:
-            if end_date is not None and end_date.date() == lesson_date:
-                return "⚠️ последнее занятие"
-            return "⛔ нет занятий до конца"
+        if warning == "last_calendar_lesson_today":
+            return "⚠️ последнее занятие"
+        if warning == "no_calendar_lessons":
+            return "⚠️ нет занятий до конца"
+        if calendar_exhausted:
+            return "⚠️ нет занятий после сегодняшнего"
         detail = f"🎟 {used}/{limit}" if used is not None and limit else f"🎟 {raw}"
         if left is not None:
             detail += f" · ост. {left}"
@@ -115,36 +122,41 @@ def subscription_badge(row, columns, lesson_date):
 
 
 def _latest_poll_id(group, today, reports, surveys):
-    """Use the current lesson occurrence, never silently reuse an old poll."""
-    candidates = []
+    """Prefer the current lesson, then next scheduled lesson, then previous one."""
+    dates = []
+    for offset in (0, 1, -1):
+        candidate = today + timedelta(days=offset)
+        if candidate.strftime("%A") in group.get("days", []):
+            dates.append(candidate)
+    if not dates:
+        dates = [today]
+
+    candidates = {}
     for position, row in enumerate(reports):
-        if len(row) < 7 or _cell(row, 1) != group["name"]:
+        if len(row) < 7 or _cell(row, 1) != group["name"] or not _cell(row, 0):
             continue
         try:
             lesson_date = datetime.strptime(_cell(row, 6)[:10], "%Y-%m-%d").date()
         except ValueError:
             continue
-        if today - timedelta(days=1) <= lesson_date <= today + timedelta(days=1) and _cell(row, 0):
-            candidates.append((lesson_date, position, _cell(row, 0)))
-    if candidates:
-        chosen = max(candidates)
-        return chosen[2], chosen[0]
+        if lesson_date in dates:
+            candidates[lesson_date] = (position, _cell(row, 0))
 
+    # Reports are authoritative; creation rows cover lost/uncatalogued reports.
     for position, row in enumerate(surveys):
-        # Poll metadata: no user id, username or user name, ISO creation timestamp.
-        if len(row) < 7 or _cell(row, 1) != group["name"] or any(_cell(row, i) for i in (2, 3, 5)):
+        if _cell(row, 1) != group["name"] or not _cell(row, 0):
             continue
-        try:
-            created = datetime.fromisoformat(_cell(row, 4).replace("Z", "+00:00"))
-        except ValueError:
+        created = _poll_creation_timestamp(row)
+        if created is None:
             continue
         lesson_date = created.date() + timedelta(days=group.get("check_day_offset", 0))
-        if today - timedelta(days=1) <= lesson_date <= today + timedelta(days=1) and _cell(row, 0):
-            candidates.append((lesson_date, position, _cell(row, 0)))
-    if candidates:
-        chosen = max(candidates)
-        return chosen[2], chosen[0]
-    return None, today
+        if lesson_date in dates and lesson_date not in candidates:
+            candidates[lesson_date] = (position, _cell(row, 0))
+
+    for date in dates:
+        if date in candidates:
+            return candidates[date][1], date
+    return None, dates[0]
 
 
 def _latest_votes(surveys, poll_id):
