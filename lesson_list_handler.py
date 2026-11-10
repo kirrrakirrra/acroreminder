@@ -74,14 +74,15 @@ def subscription_badge(row, columns, lesson_date):
     warning = _value(row, columns, "warning_7").casefold()
     calendar_left = _number(_value(row, columns, "WO Left until end"))
     difference = _number(_value(row, columns, "Difference"))
+    calendar_exhausted = calendar_left == 0 and difference is not None and difference <= 0
 
     if kind == "unlimited":
         if expired or warning == "no_calendar_lessons":
             return "⛔ безлимит закончен"
-        if calendar_left == 0 and difference is not None and difference <= 0:
+        if calendar_exhausted:
             if end_date is not None and end_date.date() == lesson_date:
                 return "⚠️ безлимит: последний день"
-            return "⛔ безлимит закончен"
+            return "⛔ нет занятий до конца"
         if calendar_left is not None:
             detail = f"∞ · {calendar_left} зан. до конца"
         else:
@@ -94,8 +95,12 @@ def subscription_badge(row, columns, lesson_date):
         left = _number(_value(row, columns, "Unused"))
         if left is None and limit is not None and used is not None:
             left = limit - used
-        if expired or (left is not None and left <= 0) or warning == "no_calendar_lessons":
+        if expired or (left is not None and left <= 0):
             return "⛔ абон. закончен"
+        if warning == "no_calendar_lessons" or calendar_exhausted:
+            if end_date is not None and end_date.date() == lesson_date:
+                return "⚠️ последнее занятие"
+            return "⛔ нет занятий до конца"
         detail = f"🎟 {used}/{limit}" if used is not None and limit else f"🎟 {raw}"
         if left is not None:
             detail += f" · ост. {left}"
