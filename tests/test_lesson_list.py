@@ -246,3 +246,13 @@ def test_last_calendar_lesson_today_never_shows_expired():
     status = lists.subscription_badge(unlimited, c, date(2026, 11, 9))
     assert "последнее занятие" in status
     assert "закончен" not in status
+
+
+def test_button_labels_show_vote_and_subscription_within_phone_friendly_limit():
+    state = sample_snapshot()
+    _, markup = lists._render(state)
+    labels = [row[0].text for row in markup.inline_keyboard[:len(state["rows"])]]
+    assert all(len(label) <= 64 for label in labels)
+    assert "Дима" in labels[0] and "закончен" in labels[0] and "❌" in labels[0]
+    assert "Аня" in labels[1] and "∞" in labels[1] and "✅" in labels[1]
+    assert "Лиза" in labels[2] and "разово" in labels[2]
