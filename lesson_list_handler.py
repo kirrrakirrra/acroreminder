@@ -210,7 +210,7 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
             if name:
                 ids = set()
                 names = set()
-                for field in ("User ID", "telegram user id", "user_id"):
+                for field in ("User ID", "user ID1", "user ID2", "telegram user id", "user_id"):
                     ids |= _tokens(_value(row, ucols, field))
                 for field in ("username1", "username2", "username"):
                     names |= _tokens(_value(row, ucols, field), usernames=True)
@@ -223,7 +223,7 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
         name = _value(row, columns, "Имя")
         if not name:
             continue
-        if group["key"] != "adult" and _value(row, columns, "Группа").casefold() != group["sheet_group"].casefold():
+        if _value(row, columns, "Группа").casefold() != group["sheet_group"].casefold():
             continue
         ids = _tokens(_value(row, columns, "User ID"))
         names = _tokens(_value(row, columns, "username"), usernames=True)
