@@ -76,7 +76,11 @@ def subscription_badge(row, columns, lesson_date):
     difference = _number(_value(row, columns, "Difference"))
 
     if kind == "unlimited":
-        if expired or warning == "no_calendar_lessons" or (calendar_left == 0 and difference is not None and difference <= 0):
+        if expired or warning == "no_calendar_lessons":
+            return "⛔ безлимит закончен"
+        if calendar_left == 0 and difference is not None and difference <= 0:
+            if end_date is not None and end_date.date() == lesson_date:
+                return "⚠️ безлимит: последний день"
             return "⛔ безлимит закончен"
         if calendar_left is not None:
             detail = f"∞ · {calendar_left} зан. до конца"
@@ -296,7 +300,7 @@ def _render(session):
             callback_data=f"al:a:{session['id']}"
         )],
         [InlineKeyboardButton("📋 Получить текст для копирования", callback_data=f"al:o:{session['id']}")],
-        [InlineKeyboardButton("🔄 Обновить ответы", callback_data=f"al:g:{session['group']}"),
+        [InlineKeyboardButton("🔄 Обновить (сброс отметок)", callback_data=f"al:g:{session['group']}"),
          InlineKeyboardButton("↩️ Другие группы", callback_data=f"al:m:{session['id']}")],
     ])
     return header, InlineKeyboardMarkup(keyboard)
