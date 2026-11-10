@@ -187,3 +187,62 @@ def test_list_handlers_are_registered_and_command_deduplicated():
     assert 'CommandHandler("list", list_command)' in source
     assert 'CallbackQueryHandler(list_callback, pattern=r"^al:")' in source
     assert '"/list"' in source
+
+
+def test_today_poll_wins_over_tomorrow_and_older_survey():
+    group = {**lists.GROUPS[2], "days": ["Monday", "Tuesday"]}
+    roster = [COLUMNS, student("Дима", user_id="11")]
+    reports = [
+        ["poll-today", group["name"], "", "", "", "", "2026-11-09"],
+        ["poll-tomorrow", group["name"], "", "", "", "", "2026-11-10"],
+    ]
+    surveys = [
+        ["poll-today", group["name"], "11", "", "", "Parent", "❌ Пропускаем"],
+        ["poll-tomorrow", group["name"], "11", "", "", "Parent", "✅ Будем по абонементу"],
+    ]
+    state = lists.build_lesson_snapshot(
+        group, date(2026, 11, 9), roster, reports, surveys, [],
+    )
+    assert state["date"] == "2026-11-09"
+    assert state["rows"][0]["vote"] == "❌ не будет"
+
+
+def test_adult_day_before_uses_next_day_poll():
+    group = dict(lists.GROUPS[-1])
+    state = lists.build_lesson_snapshot(
+        group, date(2026, 11, 9),
+        [COLUMNS, student("Таня", group="Взрослая группа", user_id="9")],
+        [["poll-tue", group["name"], "", "", "", "", "2026-11-10"]],
+        [["poll-tue", group["name"], "9", "", "", "Parent", "✅ Будем по абонементу"]],
+        [],
+    )
+    assert state["date"] == "2026-11-10"
+    assert state["rows"][0]["vote"] == "✅ будет"
+
+
+def test_poll_creation_utc_timestamp_is_converted_to_vietnam_date():
+    group = dict(lists.GROUPS[2])
+    # Sunday 20:30 UTC is Monday 03:30 in Vietnam.
+    survey_metadata = [
+        "poll-utc", group["name"], "", "",
+        "2026-11-08T20:30:00+00:00", "", "yes|no",
+    ]
+    state = lists.build_lesson_snapshot(
+        group, date(2026, 11, 9),
+        [COLUMNS, student("Дима", user_id="11")], [],
+        [survey_metadata, ["poll-utc", group["name"], "11", "", "", "Parent", "❌ Пропускаем"]],
+        [],
+    )
+    assert state["poll_found"] is True
+    assert state["date"] == "2026-11-09"
+    assert state["rows"][0]["vote"] == "❌ не будет"
+
+
+def test_last_calendar_lesson_today_never_shows_expired():
+    c = lists._header(COLUMNS)
+    unlimited = student("Лена", sub="безлимит", used="8", unused="",
+                        end="20.11.2026", calendar="0", difference="0",
+                        warning="last_calendar_lesson_today")
+    status = lists.subscription_badge(unlimited, c, date(2026, 11, 9))
+    assert "последнее занятие" in status
+    assert "закончен" not in status
