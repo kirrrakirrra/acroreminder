@@ -66,6 +66,8 @@ def subscription_badge(row, columns, lesson_date):
         return "— нет абон."
     if kind == "drop_in":
         return "💵 разово"
+    if kind not in {"unlimited", "sub_8", "sub_5", "sub_3_trial"}:
+        return "ℹ️ уточнить абон."
 
     end_raw = _value(row, columns, "Срок Действия")
     end_date = parse_date(end_raw, datetime.combine(lesson_date, datetime.min.time())) if end_raw else None
