@@ -179,3 +179,11 @@ def test_callback_checklist_and_copy(monkeypatch):
         assert "устарел" in query.edit_message_text.await_args.args[0]
 
     asyncio.run(scenario())
+
+
+def test_list_handlers_are_registered_and_command_deduplicated():
+    from pathlib import Path
+    source = Path("main.py").read_text()
+    assert 'CommandHandler("list", list_command)' in source
+    assert 'CallbackQueryHandler(list_callback, pattern=r"^al:")' in source
+    assert '"/list"' in source
