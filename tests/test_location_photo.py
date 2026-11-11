@@ -114,3 +114,17 @@ def test_location_helper_is_registered_and_action_deduplicated():
     source = Path("main.py").read_text()
     assert 'CommandHandler("location_photo_id", location_photo_id_command)' in source
     assert '"/location_photo_id"' in source
+
+
+def test_location_still_shows_map_when_photo_send_fails(monkeypatch):
+    from telegram.error import BadRequest
+
+    monkeypatch.delenv("KARINA_ID", raising=False)
+    monkeypatch.setenv("LOCATION_PHOTO_FILE_ID", "old-photo-id")
+    update, context = make_location_context()
+    context.bot.send_photo.side_effect = BadRequest("invalid file identifier")
+    asyncio.run(info.info_callback(update, context))
+    context.bot.send_photo.assert_awaited_once()
+    fallback = update.callback_query.edit_message_text.await_args
+    assert "временно недоступно" in fallback.args[0]
+    assert fallback.kwargs["reply_markup"].inline_keyboard[0][0].url == info.LOCATION_MAPS_URL
