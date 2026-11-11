@@ -182,8 +182,9 @@ def compact_subscription_status(row, columns, lesson_date, group):
 
 def _button_label(row):
     """Telegram centers button text; use consistent prefixes and protect payment alert."""
-    marker = "⭐" if row["selected"] else "☆"
-    vote_icon = row["vote"].split()[0]
+    marker = "✅" if row["selected"] else "☐"
+    # Separate the trainer checkbox from the survey answer visually.
+    vote_icon = "⭐" if row["vote"].startswith("✅") else row["vote"].split()[0]
     name = row["name"]
     status = row.get("compact_status", row["status"])
     unpaid = row.get("unpaid")
@@ -192,17 +193,17 @@ def _button_label(row):
 
     # Keep the important payment signal visible when the name is long.
     max_chars = 72
-    budget = max_chars - len(f"{marker} {vote_icon} ") - len(suffix) - len(pay)
+    budget = max_chars - len(f"{marker} — {vote_icon} ") - len(suffix) - len(pay)
     if budget < 10 and unpaid:
         pay = " ⚠️ не оплачено"
-        budget = max_chars - len(f"{marker} {vote_icon} ") - len(suffix) - len(pay)
+        budget = max_chars - len(f"{marker} — {vote_icon} ") - len(suffix) - len(pay)
     if budget < 10:
         # The original full state remains available for review in the table.
         suffix = f" — {status[:max(8, 27 - (10 - budget))]}"
         budget = max_chars - len(f"{marker} {vote_icon} ") - len(suffix) - len(pay)
     if len(name) > budget:
         name = name[:max(5, budget - 1)].rstrip() + "…"
-    return f"{marker} {vote_icon} {name}{suffix}{pay}"
+    return f"{marker} — {vote_icon} {name}{suffix}{pay}"
 
 def _latest_poll_id(group, today, reports, surveys):
     """Prefer the current lesson, then next scheduled lesson, then previous one."""
@@ -394,13 +395,16 @@ def _render(session):
         f"Опрос: {'найден' if session['poll_found'] else 'нет свежего опроса'}\n"
         f"Отмечено: {count}/{len(rows)}\n\n"
         "Нажмите на ученика, чтобы отметить фактическое присутствие.\n"
-        "☆/⭐ — отметка тренера; следующий знак — ответ опроса."
+        "☐/✅ — отметка тренера; после тире — ответ опроса (⭐ будет, ❌ не будет, ❔ нет ответа)."
     )
     keyboard = []
     for index in range(start, end):
         row = rows[index]
         keyboard.append([
-            InlineKeyboardButton(_button_label(row), callback_data=f"al:t:{session['id']}:{index}")
+            InlineKeyboardButton(
+                _button_label(row),
+                callback_data=f"al:t:{session['id']}:{index}:{int(bool(row['selected']))}"
+            )
         ])
     paging = []
     if start:
@@ -480,30 +484,50 @@ async def list_callback(update, context):
     if not session or parts[2] != session["id"]:
         await query.edit_message_text("Список устарел. Отправьте /list заново.")
         return
-    action = parts[1]
-    if action == "t" and len(parts) == 4:
-        index = _number(parts[3])
-        if index is None or index < 0 or index >= len(session["rows"]):
+    # Two distinct states have distinct callback data, so an intentional
+    # immediate untick is not mistaken for a duplicate by the 2s webhook
+    # cooldown. A replay of an older button can never invert the state.
+    # Serialize edits: webhook updates are handled in separate async tasks.
+    async with session.setdefault("_edit_lock", asyncio.Lock()):
+        action = parts[1]
+        if action == "t" and len(parts) == 5:
+            index = _number(parts[3])
+            expected = parts[4]
+            if (index is None or index < 0 or index >= len(session["rows"])
+                    or expected not in {"0", "1"}):
+                return
+            row = session["rows"][index]
+            if row["selected"] != (expected == "1"):
+                # The same old button was tapped again before a refreshed
+                # keyboard appeared (or Telegram resent a callback).
+                return
+            previous = row["selected"]
+            row["selected"] = not previous
+            try:
+                text, keyboard = _render(session)
+                await query.edit_message_text(text, reply_markup=keyboard)
+            except Exception:
+                # A failed edit must not update the copied attendance list.
+                row["selected"] = previous
+                raise
             return
-        row = session["rows"][index]
-        row["selected"] = not row["selected"]
-    elif action == "p" and len(parts) == 4:
-        page = _number(parts[3])
-        if page is None or page < 0 or page * PAGE_SIZE >= max(1, len(session["rows"])):
+        elif action == "p" and len(parts) == 4:
+            page = _number(parts[3])
+            if page is None or page < 0 or page * PAGE_SIZE >= max(1, len(session["rows"])):
+                return
+            session["page"] = page
+        elif action == "m":
+            context.user_data.pop(SESSION_KEY, None)
+            await query.edit_message_text("📋 Выберите группу для списка занятия:", reply_markup=_menu())
             return
-        session["page"] = page
-    elif action == "m":
-        context.user_data.pop(SESSION_KEY, None)
-        await query.edit_message_text("📋 Выберите группу для списка занятия:", reply_markup=_menu())
-        return
-    elif action == "o":
-        text = _export(session)
-        if text is None:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="Сначала отметьте присутствующих учеников.")
+        elif action == "o":
+            text = _export(session)
+            if text is None:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text="Сначала отметьте присутствующих учеников.")
+                return
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
             return
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
-        return
-    else:
-        return
-    text, keyboard = _render(session)
-    await query.edit_message_text(text, reply_markup=keyboard)
+        else:
+            return
+        text, keyboard = _render(session)
+        await query.edit_message_text(text, reply_markup=keyboard)
