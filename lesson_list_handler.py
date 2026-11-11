@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from group_config import GROUPS
 from sheets_runtime import run_sheets
-from subscription_tools import normalize_subscription_type, parse_date
+from subscription_tools import normalize_subscription_type, parse_date, parse_unpaid_payment
 from report_rows import _poll_creation_timestamp
 from utils import now_local
 
@@ -16,7 +16,6 @@ SHEET_ID = os.getenv("SPREADSHEET_ID")
 SESSION_KEY = "_lesson_list_session"
 PAGE_SIZE = 12
 MAX_ENTRIES = 75
-EXTRA_TRAINER_COST = "−300k₫"
 
 
 def _is_authorized(user):
@@ -125,6 +124,86 @@ def subscription_badge(row, columns, lesson_date):
     return detail
 
 
+
+def compact_subscription_status(row, columns, lesson_date, group):
+    """Short trainer-facing usage; unlimited has a display-only 10/15 guideline."""
+    kind = normalize_subscription_type(_value(row, columns, "Абонемент"))
+    if not kind:
+        return "нет абон."
+    if kind == "drop_in":
+        return "разово"
+    if kind not in {"unlimited", "sub_8", "sub_5", "sub_3_trial"}:
+        return "уточнить абон."
+
+    used = _number(_value(row, columns, "Used"))
+    if kind == "unlimited":
+        # This is descriptive (actual lessons used), not a hard consumption cap.
+        limit = 15 if group["key"].startswith("69_") else 10
+        usage = f"∞ ({used}/{limit})" if used is not None else f"∞ (—/{limit})"
+    else:
+        limit = _number(_value(row, columns, "Лимит"))
+        if limit is None or limit <= 0:
+            limit = {"sub_8": 8, "sub_5": 5, "sub_3_trial": 3}[kind]
+        usage = f"({used}/{limit})" if used is not None else f"(—/{limit})"
+
+    end_raw = _value(row, columns, "Срок Действия")
+    end_date = parse_date(
+        end_raw, datetime.combine(lesson_date, datetime.min.time())
+    ) if end_raw else None
+    expired = (
+        (end_date is not None and end_date.date() < lesson_date)
+        or (end_date is None and _value(row, columns, "Days until end").casefold() == "expired")
+    )
+    if expired:
+        return f"❗ {usage} (срок истёк)"
+
+    if kind != "unlimited":
+        left = _number(_value(row, columns, "Unused"))
+        if left is None and used is not None:
+            left = limit - used
+        if (left is not None and left <= 0) or (used is not None and used >= limit):
+            return f"❗ {usage}"
+
+    warning = _value(row, columns, "warning_7").casefold()
+    if warning == "no_calendar_lessons":
+        return f"❗ {usage} (нет занятий)"
+    if warning == "last_calendar_lesson_today":
+        return f"{usage} (посл. занятие)"
+
+    calendar_left = _number(_value(row, columns, "WO Left until end"))
+    difference = _number(_value(row, columns, "Difference"))
+    if calendar_left == 0 and difference is not None and difference <= 0:
+        # Zero future sessions alone must not claim that today's class is invalid.
+        return f"{usage} (посл. занятие)"
+    if end_date is not None and end_date.date() == lesson_date:
+        return f"{usage} (посл. день)"
+    return usage
+
+
+def _button_label(row):
+    """Telegram centers button text; use consistent prefixes and protect payment alert."""
+    marker = "⭐" if row["selected"] else "☆"
+    vote_icon = row["vote"].split()[0]
+    name = row["name"]
+    status = row.get("compact_status", row["status"])
+    unpaid = row.get("unpaid")
+    suffix = f" — {status}"
+    pay = f" ⚠️ {unpaid}" if unpaid else ""
+
+    # Keep the important payment signal visible when the name is long.
+    max_chars = 72
+    budget = max_chars - len(f"{marker} {vote_icon} ") - len(suffix) - len(pay)
+    if budget < 10 and unpaid:
+        pay = " ⚠️ не оплачено"
+        budget = max_chars - len(f"{marker} {vote_icon} ") - len(suffix) - len(pay)
+    if budget < 10:
+        # The original full state remains available for review in the table.
+        suffix = f" — {status[:max(8, 27 - (10 - budget))]}"
+        budget = max_chars - len(f"{marker} {vote_icon} ") - len(suffix) - len(pay)
+    if len(name) > budget:
+        name = name[:max(5, budget - 1)].rstrip() + "…"
+    return f"{marker} {vote_icon} {name}{suffix}{pay}"
+
 def _latest_poll_id(group, today, reports, surveys):
     """Prefer the current lesson, then next scheduled lesson, then previous one."""
     dates = []
@@ -221,12 +300,25 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
 
     students = []
     matched = set()
+    seen_students = set()
     for position, row in enumerate(roster_data[1:], start=3):
         name = _value(row, columns, "Имя")
-        if not name:
+        sheet_group = _value(row, columns, "Группа")
+
+        # The same tabs also contain secondary reference lists below a
+        # repeated "Имя / Группа" heading. They are NOT attendance rosters
+        # and typically have no subscription columns.
+        if name.casefold() in {"имя", "имя ребенка", "имя ребёнка"} and sheet_group.casefold() == "группа":
+            break
+        if not name or sheet_group.casefold() != group["sheet_group"].casefold():
             continue
-        if _value(row, columns, "Группа").casefold() != group["sheet_group"].casefold():
+        # Keep the first (authoritative) roster row and its subscription;
+        # repeated names must never create another checkbox or lose the
+        # status from the first row.
+        student_key = " ".join(name.split()).casefold()
+        if student_key in seen_students:
             continue
+        seen_students.add(student_key)
         ids = _tokens(_value(row, columns, "User ID"))
         names = _tokens(_value(row, columns, "username"), usernames=True)
         extra_ids, extra_names = fallback.get(name.casefold(), (set(), set()))
@@ -239,6 +331,8 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
         students.append({
             "name": name,
             "status": subscription_badge(row, columns, lesson_date),
+            "compact_status": compact_subscription_status(row, columns, lesson_date, group),
+            "unpaid": parse_unpaid_payment(_value(row, columns, "Депозит")),
             "vote": _vote_badge(vote["answer"] if vote else ""),
             "new": False, "selected": False, "row": position,
         })
@@ -250,7 +344,7 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
         identity = f"@{vote['username']}" if vote["username"] else (vote["name"] or f"ID {vote['id']}")
         newcomers.append({
             "name": f"🆕 {identity}",
-            "status": "уточнить ученика",
+            "status": "уточнить ученика", "compact_status": "новый", "unpaid": None,
             "vote": _vote_badge(vote["answer"]),
             "new": True, "selected": False,
         })
@@ -260,7 +354,7 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
     return {
         "id": secrets.token_hex(4), "group": group["key"], "title": group["display_name"],
         "date": lesson_date.isoformat(), "poll_found": bool(poll_id),
-        "rows": students + newcomers, "extra_trainer": False, "page": 0,
+        "rows": students + newcomers, "page": 0,
     }
 
 
@@ -300,23 +394,14 @@ def _render(session):
         f"Опрос: {'найден' if session['poll_found'] else 'нет свежего опроса'}\n"
         f"Отмечено: {count}/{len(rows)}\n\n"
         "Нажмите на ученика, чтобы отметить фактическое присутствие.\n"
-        "Значок ответа справа — только информация из опроса."
+        "☆/⭐ — отметка тренера; следующий знак — ответ опроса."
     )
     keyboard = []
     for index in range(start, end):
         row = rows[index]
-        checkbox = "✅" if row["selected"] else "☐"
-        vote_icon = row["vote"].split()[0]
-        status = row["status"].replace(
-            "⚠️ нет занятий после сегодняшнего", "⚠️ после сегодня 0 зан."
-        ).replace(
-            "⚠️ безлимит: нет занятий до конца", "⚠️ ∞: нет занятий"
-        ).replace(
-            "⚠️ безлимит: последнее занятие", "⚠️ ∞: посл. занятие"
-        )
-        prefix = f"{checkbox} {row['name'][:22]} {vote_icon} · "
-        label = prefix + status[:max(0, 64 - len(prefix))]
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"al:t:{session['id']}:{index}")])
+        keyboard.append([
+            InlineKeyboardButton(_button_label(row), callback_data=f"al:t:{session['id']}:{index}")
+        ])
     paging = []
     if start:
         paging.append(InlineKeyboardButton("◀️ Назад", callback_data=f"al:p:{session['id']}:{page-1}"))
@@ -325,10 +410,6 @@ def _render(session):
     if paging:
         keyboard.append(paging)
     keyboard.extend([
-        [InlineKeyboardButton(
-            ("✅" if session["extra_trainer"] else "☐") + f" Доп. тренер ({EXTRA_TRAINER_COST})",
-            callback_data=f"al:a:{session['id']}"
-        )],
         [InlineKeyboardButton("📋 Получить текст для копирования", callback_data=f"al:o:{session['id']}")],
         [InlineKeyboardButton("🔄 Обновить (сброс отметок)", callback_data=f"al:g:{session['group']}"),
          InlineKeyboardButton("↩️ Другие группы", callback_data=f"al:m:{session['id']}")],
@@ -342,11 +423,8 @@ def _export(session):
         return None
     lines = [f"📋 {session['title']} · {session['date']}"]
     for index, row in enumerate(rows, start=1):
-        lines.append(f"{index}. {row['name']}")
-    lines.extend([
-        "", f"Доп. тренер: {EXTRA_TRAINER_COST if session['extra_trainer'] else 'нет'}",
-        "", "Оплаты:", "Новенькие:", "Комментарии:",
-    ])
+        payment = f" ({row['unpaid']})" if row.get("unpaid") else ""
+        lines.append(f"{index}. {row['name']}{payment}")
     text = "\n".join(lines)
     if len(text) > 4096:
         raise ValueError("Список слишком длинный для Telegram")
@@ -414,8 +492,6 @@ async def list_callback(update, context):
         if page is None or page < 0 or page * PAGE_SIZE >= max(1, len(session["rows"])):
             return
         session["page"] = page
-    elif action == "a":
-        session["extra_trainer"] = not session["extra_trainer"]
     elif action == "m":
         context.user_data.pop(SESSION_KEY, None)
         await query.edit_message_text("📋 Выберите группу для списка занятия:", reply_markup=_menu())
