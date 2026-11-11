@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.error import TelegramError
 import logging
 import os
 
@@ -121,18 +122,21 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if photo_id:
             # Keep the original menu visible; send the image as a separate
             # Telegram photo with its own location and map button.
-            await context.bot.send_photo(
-                chat_id=update.effective_chat.id,
-                photo=photo_id,
-                caption=LOCATION_PHOTO_CAPTION,
-                reply_markup=_location_keyboard(),
-            )
-        else:
-            await query.edit_message_text(
-                LOCATION_TEXT + "\n\n"
-                "📸 Фото входа будет доступно после настройки.",
-                reply_markup=_location_keyboard(),
-            )
+            try:
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=photo_id,
+                    caption=LOCATION_PHOTO_CAPTION,
+                    reply_markup=_location_keyboard(),
+                )
+                return
+            except TelegramError:
+                logging.exception("Could not send configured location photo")
+        await query.edit_message_text(
+            LOCATION_TEXT + "\n\n"
+            "📸 Фото входа временно недоступно.",
+            reply_markup=_location_keyboard(),
+        )
         return
 
     # Назад в меню
