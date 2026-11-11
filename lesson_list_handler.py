@@ -139,12 +139,12 @@ def compact_subscription_status(row, columns, lesson_date, group):
     if kind == "unlimited":
         # This is descriptive (actual lessons used), not a hard consumption cap.
         limit = 15 if group["key"].startswith("69_") else 10
-        usage = f"∞ ({used} из {limit})" if used is not None else f"∞ (из {limit})"
+        usage = f"∞ ({used}/{limit})" if used is not None else f"∞ (—/{limit})"
     else:
         limit = _number(_value(row, columns, "Лимит"))
         if limit is None or limit <= 0:
             limit = {"sub_8": 8, "sub_5": 5, "sub_3_trial": 3}[kind]
-        usage = f"{used} из {limit}" if used is not None else f"из {limit}"
+        usage = f"({used}/{limit})" if used is not None else f"(—/{limit})"
 
     end_raw = _value(row, columns, "Срок Действия")
     end_date = parse_date(
