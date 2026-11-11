@@ -325,7 +325,7 @@ def test_duplicate_reference_section_does_not_generate_extra_checkboxes():
         student("Жаркова Майя", group=group["sheet_group"],
                 sub="Абон 8", limit="8", used="4", unused="4"),
         student("Заливохина Дарина", group=group["sheet_group"],
-                sub="Абон 8", used="4", unused="4"),
+                sub="Абон 8", limit="8", used="4", unused="4"),
         student("Стрищенко Глеб", group=group["sheet_group"],
                 sub="Безлимит", calendar="11", used="3"),
         student("Имя Ребенка", group="Группа", sub="Коммент"),
