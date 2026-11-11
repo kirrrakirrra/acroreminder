@@ -388,3 +388,26 @@ def test_duplicate_within_primary_roster_keeps_first_status_and_position():
         "Анна Стрищенко", "Борис",
     ]
     assert "5 зан." in state["rows"][0]["status"]
+
+
+def test_eleven_primary_and_eleven_secondary_rows_do_not_create_next_page():
+    group = dict(lists.GROUPS[3])
+    first = [
+        student(f"Продолжающий {index}", group=group["sheet_group"],
+                sub="Абон 8", limit="8", used="4", unused="4")
+        for index in range(11)
+    ]
+    secondary = [
+        student(f"Продолжающий {index}", group=group["sheet_group"], sub="")
+        for index in range(11)
+    ]
+    state = lists.build_lesson_snapshot(
+        group, date(2026, 11, 11),
+        [COLUMNS, *first, student("Имя Ребенка", group="Группа"), *secondary],
+        [], [], [],
+    )
+    assert len(state["rows"]) == 11
+    assert all("4/8" in item["status"] for item in state["rows"])
+    _, keyboard = lists._render(state)
+    labels = [button.text for row in keyboard.inline_keyboard for button in row]
+    assert not any("Далее" in label for label in labels)
