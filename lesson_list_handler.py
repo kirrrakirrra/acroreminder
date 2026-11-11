@@ -200,7 +200,7 @@ def _button_label(row):
     if budget < 10:
         # The original full state remains available for review in the table.
         suffix = f" — {status[:max(8, 27 - (10 - budget))]}"
-        budget = max_chars - len(f"{marker} {vote_icon} ") - len(suffix) - len(pay)
+        budget = max_chars - len(f"{marker} — {vote_icon} ") - len(suffix) - len(pay)
     if len(name) > budget:
         name = name[:max(5, budget - 1)].rstrip() + "…"
     return f"{marker} — {vote_icon} {name}{suffix}{pay}"
