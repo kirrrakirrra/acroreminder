@@ -161,3 +161,59 @@ def test_addressed_duplicate_during_slow_check_is_ignored_and_later_retry_allowe
             assert calls == [100, 103]
 
     asyncio.run(scenario())
+
+
+
+def test_list_toggles_are_distinct_webhook_actions_even_inside_two_seconds(monkeypatch):
+    """The processor must not swallow an intentional immediate uncheck."""
+    main = _load_main(monkeypatch)
+    app = SimpleNamespace(bot=Mock(), process_update=AsyncMock())
+    processor = main.WebhookUpdateProcessor(app)
+    clock = [400.0]
+    monkeypatch.setattr(main.time, "monotonic", lambda: clock[0])
+    query = SimpleNamespace(
+        data="al:t:abc123:2:0",
+        message=SimpleNamespace(message_id=99),
+        answer=AsyncMock(),
+    )
+
+    def make_update(data, _bot):
+        query.data = data["callback"]
+        return SimpleNamespace(
+            update_id=data["update_id"],
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=1),
+            message=None,
+            callback_query=SimpleNamespace(
+                data=query.data,
+                message=query.message,
+                answer=query.answer,
+            ),
+        )
+
+    async def scenario():
+        request = SimpleNamespace(json=AsyncMock(return_value={
+            "update_id": 500, "callback": "al:t:abc123:2:0"
+        }))
+        with patch.object(main.Update, "de_json", side_effect=make_update):
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 1
+
+            # The same callback (replay) is suppressed.
+            request.json.return_value = {
+                "update_id": 501, "callback": "al:t:abc123:2:0"
+            }
+            await processor.handle(request)
+            assert app.process_update.await_count == 1
+
+            # The updated button has :1 instead of :0, so it is a
+            # distinct action accepted immediately, without waiting 2s.
+            request.json.return_value = {
+                "update_id": 502, "callback": "al:t:abc123:2:1"
+            }
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 2
+            assert query.answer.await_count == 1
+    asyncio.run(scenario())
