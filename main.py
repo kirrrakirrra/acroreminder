@@ -62,6 +62,17 @@ class WebhookUpdateProcessor:
             self.recent_ids.discard(self.recent_order.popleft())
         return True
 
+    def _cooldown_for_action(self, key):
+        # A second click on a /list checkbox must remain responsive.
+        # Identical callbacks are still de-duplicated for 1 second; the
+        # updated checkbox callback embeds the new expected state (0/1),
+        # so an intentional reverse click is a different action.
+        if key is not None and len(key) >= 5 and key[2] == "callback":
+            callback_data = key[4]
+            if isinstance(callback_data, str) and callback_data.startswith("al:t:"):
+                return 1.0
+        return self.action_cooldown_seconds
+
     def _action_key(self, update):
         user = getattr(update, "effective_user", None)
         chat = getattr(update, "effective_chat", None)
@@ -114,7 +125,7 @@ class WebhookUpdateProcessor:
                 }
             if key is not None and (
                 key in self.action_active
-                or now - self.action_recent.get(key, float("-inf")) < self.action_cooldown_seconds
+                or now - self.action_recent.get(key, float("-inf")) < self._cooldown_for_action(key)
             ):
                 logging.info("Ignoring rapid duplicate Telegram action update_id=%s", update.update_id)
                 query = getattr(update, "callback_query", None)
