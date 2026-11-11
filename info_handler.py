@@ -10,7 +10,11 @@ LOCATION_TEXT = (
     "Город: Nha Trang\n"
     "Ориентиры: Scenia Bay, Shama Book Bakery, Marisan."
 )
-LOCATION_PHOTO_CAPTION = LOCATION_TEXT + "\n\n📸 На фото — вход в наш зал."
+LOCATION_PHOTO_CAPTION = (
+    LOCATION_TEXT
+    + "\n\n📸 На фото — вход в наш зал."
+    + f'\n\n📍 <b>Локация</b>: <a href="{LOCATION_MAPS_URL}">Смотреть на карте</a>'
+)
 
 
 def _location_keyboard():
@@ -127,6 +131,7 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.effective_chat.id,
                     photo=photo_id,
                     caption=LOCATION_PHOTO_CAPTION,
+                    parse_mode="HTML",
                     reply_markup=_location_keyboard(),
                 )
                 return
