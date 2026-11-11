@@ -267,8 +267,9 @@ def test_real_usernames_id_columns_and_adult_repeated_section_headers():
     group = dict(lists.GROUPS[-1])
     roster = [
         COLUMNS,
-        student("Имя", group="Группа", sub="Абонемент"),
         student("Света", group="Взрослая группа", username=""),
+        student("Имя", group="Группа", sub="Абонемент"),
+        student("Света", group="Взрослая группа", username="", sub=""),
     ]
     reports = [["poll-adult", group["name"], "", "", "", "", "2026-11-10"]]
     surveys = [["poll-adult", group["name"], "777", "", "",
@@ -322,7 +323,7 @@ def test_duplicate_reference_section_does_not_generate_extra_checkboxes():
     roster = [
         COLUMNS,
         student("Жаркова Майя", group=group["sheet_group"],
-                sub="Абон 8", used="4", unused="4"),
+                sub="Абон 8", limit="8", used="4", unused="4"),
         student("Заливохина Дарина", group=group["sheet_group"],
                 sub="Абон 8", used="4", unused="4"),
         student("Стрищенко Глеб", group=group["sheet_group"],
@@ -359,7 +360,7 @@ def test_all_group_tabs_stop_at_secondary_reference_header():
         roster = [
             COLUMNS,
             student(name, group=group["sheet_group"],
-                    sub="Абон 8", used="3", unused="5"),
+                    sub="Абон 8", limit="8", used="3", unused="5"),
             student("Имя", group="Группа", sub="Коммент"),
             student(name, group=group["sheet_group"], sub=""),
         ]
