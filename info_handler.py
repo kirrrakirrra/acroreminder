@@ -3,6 +3,54 @@ from telegram.ext import ContextTypes
 import logging
 import os
 
+LOCATION_MAPS_URL = "https://maps.app.goo.gl/PzUYSZNyid4P2gwd7?g_st=com.google.maps.preview.copy"
+LOCATION_TEXT = (
+    "📍 Как найти зал:\n\n"
+    "Город: Nha Trang\n"
+    "Ориентиры: Scenia Bay, Shama Book Bakery, Marisan."
+)
+LOCATION_PHOTO_CAPTION = LOCATION_TEXT + "\n\n📸 На фото — вход в наш зал."
+
+
+def _location_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗺 Открыть Google Maps", url=LOCATION_MAPS_URL)]
+    ])
+
+
+async def location_photo_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Get a reusable Telegram file_id from an admin's replied-to photo."""
+    allowed = {
+        int(value) for value in (os.getenv("ADMIN_ID"), os.getenv("KARINA_ID"))
+        if value and value.lstrip("-").isdigit()
+    }
+    user = update.effective_user
+    if user is None or user.id not in allowed:
+        await update.message.reply_text("⛔ Эта команда доступна только администратору.")
+        return
+    if getattr(update.effective_chat, "type", None) != "private":
+        await update.message.reply_text("Ответьте на фотографию в личном чате с Акроботом.")
+        return
+
+    original = getattr(update.message, "reply_to_message", None)
+    photos = getattr(original, "photo", None) if original is not None else None
+    if not photos:
+        await update.message.reply_text(
+            "Чтобы выбрать фото фасада, нажмите «Ответить» на отправленную "
+            "ранее фотографию и напишите /location_photo_id."
+        )
+        return
+
+    photo_id = photos[-1].file_id
+    await update.message.reply_text(
+        "📸 Нашла фотографию. Это её идентификатор для Акробота:\n\n"
+        f"{photo_id}\n\n"
+        "Передайте его администратору для настройки "
+        "LOCATION_PHOTO_FILE_ID в Render. Бот будет брать фото из "
+        "Telegram, а подпись и ссылку на карту добавит сам."
+    )
+
+
 # Кнопки
 def get_info_keyboard():
     return InlineKeyboardMarkup([
@@ -68,6 +116,25 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logging.warning(f"Не удалось отправить Карине сообщение: {e}")
+    if section == "location":
+        photo_id = (os.getenv("LOCATION_PHOTO_FILE_ID") or "").strip()
+        if photo_id:
+            # Keep the original menu visible; send the image as a separate
+            # Telegram photo with its own location and map button.
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=photo_id,
+                caption=LOCATION_PHOTO_CAPTION,
+                reply_markup=_location_keyboard(),
+            )
+        else:
+            await query.edit_message_text(
+                LOCATION_TEXT + "\n\n"
+                "📸 Фото входа будет доступно после настройки.",
+                reply_markup=_location_keyboard(),
+            )
+        return
+
     # Назад в меню
     if section == "back":
         await query.edit_message_text(
@@ -108,16 +175,6 @@ async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Вт / Чт — 10:00–11:00\n\n"
             "────── ✦ ──────\n"
             "❗️*Обязательна предварительная запись*❗️"
-        ),
-            "location": (
-                "📍 *Как найти зал:*\n\n"
-                "Город: Nha Trang\n"
-                "Рядом:Scenia Bay, Shama book bakery, Marisan\n\n"
-                "🗺 [Открыть в Google Maps](https://maps.app.goo.gl/PzUYSZNyid4P2gwd7?g_st=com.google.maps.preview.copy)\n"
-                "📸 Фото фасада зала:\n" 
-                "↳[Чат 4-6 лет](https://t.me/c/3757833438/1/19)\n"
-                "↳[Чат 6-9 лет](https://t.me/c/1820363527/1/2747)\n"
-                "↳[Чат Взрослой группы](https://t.me/c/3963339870/8)"
         ),
         "rules": (
             "🧦 *Подготовка к занятиям:*\n\n"
