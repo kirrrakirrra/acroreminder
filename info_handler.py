@@ -10,7 +10,11 @@ LOCATION_TEXT = (
     "Город: Nha Trang\n"
     "Ориентиры: Scenia Bay, Shama Book Bakery, Marisan."
 )
-LOCATION_PHOTO_CAPTION = (\n    LOCATION_TEXT\n    + "\n\n📸 На фото — вход в наш зал."\n    + f'\n\n📍 <b>Локация</b>: <a href="{LOCATION_MAPS_URL}">Смотреть на карте</a>'\n)
+LOCATION_PHOTO_CAPTION = (
+    LOCATION_TEXT
+    + "\n\n📸 На фото — вход в наш зал."
+    + f'\n\n📍 <b>Локация</b>: <a href="{LOCATION_MAPS_URL}">Смотреть на карте</a>'
+)
 
 
 def _location_keyboard():
