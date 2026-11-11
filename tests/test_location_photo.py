@@ -36,6 +36,10 @@ def test_location_photo_sent_to_chat_with_caption_and_maps_button(monkeypatch):
     assert "Scenia Bay" in args["caption"]
     assert "Shama Book Bakery" in args["caption"]
     assert "вход в наш зал" in args["caption"]
+    assert args["parse_mode"] == "HTML"
+    assert '📍 <b>Локация</b>: <a href="' in args["caption"]
+    assert '">Смотреть на карте</a>' in args["caption"]
+    assert info.LOCATION_MAPS_URL in args["caption"]
     buttons = args["reply_markup"].inline_keyboard
     assert buttons[0][0].url.startswith("https://maps.app.goo.gl/")
     assert not update.callback_query.edit_message_text.await_count
