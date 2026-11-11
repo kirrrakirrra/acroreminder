@@ -16,7 +16,6 @@ SHEET_ID = os.getenv("SPREADSHEET_ID")
 SESSION_KEY = "_lesson_list_session"
 PAGE_SIZE = 12
 MAX_ENTRIES = 75
-EXTRA_TRAINER_COST = "−300k₫"
 
 
 def _is_authorized(user):
@@ -221,12 +220,25 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
 
     students = []
     matched = set()
+    seen_students = set()
     for position, row in enumerate(roster_data[1:], start=3):
         name = _value(row, columns, "Имя")
-        if not name:
+        sheet_group = _value(row, columns, "Группа")
+
+        # The same tabs also contain secondary reference lists below a
+        # repeated "Имя / Группа" heading. They are NOT attendance rosters
+        # and typically have no subscription columns.
+        if name.casefold() in {"имя", "имя ребенка", "имя ребёнка"} and sheet_group.casefold() == "группа":
+            break
+        if not name or sheet_group.casefold() != group["sheet_group"].casefold():
             continue
-        if _value(row, columns, "Группа").casefold() != group["sheet_group"].casefold():
+        # Keep the first (authoritative) roster row and its subscription;
+        # repeated names must never create another checkbox or lose the
+        # status from the first row.
+        student_key = " ".join(name.split()).casefold()
+        if student_key in seen_students:
             continue
+        seen_students.add(student_key)
         ids = _tokens(_value(row, columns, "User ID"))
         names = _tokens(_value(row, columns, "username"), usernames=True)
         extra_ids, extra_names = fallback.get(name.casefold(), (set(), set()))
@@ -260,7 +272,7 @@ def build_lesson_snapshot(group, today, roster_data, report_data, survey_data, u
     return {
         "id": secrets.token_hex(4), "group": group["key"], "title": group["display_name"],
         "date": lesson_date.isoformat(), "poll_found": bool(poll_id),
-        "rows": students + newcomers, "extra_trainer": False, "page": 0,
+        "rows": students + newcomers, "page": 0,
     }
 
 
@@ -325,10 +337,6 @@ def _render(session):
     if paging:
         keyboard.append(paging)
     keyboard.extend([
-        [InlineKeyboardButton(
-            ("✅" if session["extra_trainer"] else "☐") + f" Доп. тренер ({EXTRA_TRAINER_COST})",
-            callback_data=f"al:a:{session['id']}"
-        )],
         [InlineKeyboardButton("📋 Получить текст для копирования", callback_data=f"al:o:{session['id']}")],
         [InlineKeyboardButton("🔄 Обновить (сброс отметок)", callback_data=f"al:g:{session['group']}"),
          InlineKeyboardButton("↩️ Другие группы", callback_data=f"al:m:{session['id']}")],
@@ -343,10 +351,6 @@ def _export(session):
     lines = [f"📋 {session['title']} · {session['date']}"]
     for index, row in enumerate(rows, start=1):
         lines.append(f"{index}. {row['name']}")
-    lines.extend([
-        "", f"Доп. тренер: {EXTRA_TRAINER_COST if session['extra_trainer'] else 'нет'}",
-        "", "Оплаты:", "Новенькие:", "Комментарии:",
-    ])
     text = "\n".join(lines)
     if len(text) > 4096:
         raise ValueError("Список слишком длинный для Telegram")
@@ -414,8 +418,6 @@ async def list_callback(update, context):
         if page is None or page < 0 or page * PAGE_SIZE >= max(1, len(session["rows"])):
             return
         session["page"] = page
-    elif action == "a":
-        session["extra_trainer"] = not session["extra_trainer"]
     elif action == "m":
         context.user_data.pop(SESSION_KEY, None)
         await query.edit_message_text("📋 Выберите группу для списка занятия:", reply_markup=_menu())
