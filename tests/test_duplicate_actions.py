@@ -161,3 +161,121 @@ def test_addressed_duplicate_during_slow_check_is_ignored_and_later_retry_allowe
             assert calls == [100, 103]
 
     asyncio.run(scenario())
+
+
+
+def test_list_toggles_are_distinct_webhook_actions_even_inside_two_seconds(monkeypatch):
+    """The processor must not swallow an intentional immediate uncheck."""
+    main = _load_main(monkeypatch)
+    app = SimpleNamespace(bot=Mock(), process_update=AsyncMock())
+    processor = main.WebhookUpdateProcessor(app)
+    clock = [400.0]
+    monkeypatch.setattr(main.time, "monotonic", lambda: clock[0])
+    query = SimpleNamespace(
+        data="al:t:abc123:2:0",
+        message=SimpleNamespace(message_id=99),
+        answer=AsyncMock(),
+    )
+
+    def make_update(data, _bot):
+        query.data = data["callback"]
+        return SimpleNamespace(
+            update_id=data["update_id"],
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=1),
+            message=None,
+            callback_query=SimpleNamespace(
+                data=query.data,
+                message=query.message,
+                answer=query.answer,
+            ),
+        )
+
+    async def scenario():
+        request = SimpleNamespace(json=AsyncMock(return_value={
+            "update_id": 500, "callback": "al:t:abc123:2:0"
+        }))
+        with patch.object(main.Update, "de_json", side_effect=make_update):
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 1
+
+            # The same callback (replay) is suppressed.
+            request.json.return_value = {
+                "update_id": 501, "callback": "al:t:abc123:2:0"
+            }
+            await processor.handle(request)
+            assert app.process_update.await_count == 1
+
+            # The updated button has :1 instead of :0, so it is a
+            # distinct action accepted immediately, without waiting 2s.
+            request.json.return_value = {
+                "update_id": 502, "callback": "al:t:abc123:2:1"
+            }
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 2
+            assert query.answer.await_count == 1
+    asyncio.run(scenario())
+
+
+
+def test_identical_list_checkbox_has_one_second_cooldown_only(monkeypatch):
+    main = _load_main(monkeypatch)
+    app = SimpleNamespace(bot=Mock(), process_update=AsyncMock())
+    processor = main.WebhookUpdateProcessor(app)
+    clock = [100.0]
+    monkeypatch.setattr(main.time, "monotonic", lambda: clock[0])
+
+    def make_update(data, _bot):
+        callback_data = data.get("callback")
+        return SimpleNamespace(
+            update_id=data["update_id"],
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=1),
+            message=None if callback_data is not None else SimpleNamespace(text=data.get("text", "/check")),
+            callback_query=(
+                SimpleNamespace(
+                    data=callback_data,
+                    message=SimpleNamespace(message_id=55),
+                    answer=AsyncMock(),
+                ) if callback_data is not None else None
+            ),
+        )
+
+    async def scenario():
+        request = SimpleNamespace(json=AsyncMock(return_value={
+            "update_id": 200, "callback": "al:t:abc123:3:0"
+        }))
+        with patch.object(main.Update, "de_json", side_effect=make_update):
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 1
+
+            clock[0] += 0.99
+            request.json.return_value = {"update_id": 201, "callback": "al:t:abc123:3:0"}
+            await processor.handle(request)
+            assert app.process_update.await_count == 1
+
+            clock[0] += 0.02
+            request.json.return_value = {"update_id": 202, "callback": "al:t:abc123:3:0"}
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 2
+
+            # Other commands keep their existing two-second protection.
+            clock[0] += 1.0
+            request.json.return_value = {"update_id": 203, "text": "/check"}
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 3
+            clock[0] += 1.1
+            request.json.return_value = {"update_id": 204, "text": "/check"}
+            await processor.handle(request)
+            assert app.process_update.await_count == 3
+            clock[0] += 1.0
+            request.json.return_value = {"update_id": 205, "text": "/check"}
+            await processor.handle(request)
+            await asyncio.gather(*processor.active_tasks)
+            assert app.process_update.await_count == 4
+    asyncio.run(scenario())

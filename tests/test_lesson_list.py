@@ -162,9 +162,10 @@ def test_callback_checklist_and_copy(monkeypatch):
         assert context.user_data[lists.SESSION_KEY] is state
         assert query.edit_message_text.await_count == 2
 
-        query.data = f"al:t:{state['id']}:2"
+        query.data = f"al:t:{state['id']}:2:0"
         await lists.list_callback(update, context)
         assert state["rows"][2]["selected"] is True
+        assert query.edit_message_text.await_args.kwargs["reply_markup"].inline_keyboard[2][0].callback_data.endswith(":2:1")
 
         _, keyboard = lists._render(state)
         assert not any(
@@ -258,13 +259,13 @@ def test_button_labels_have_star_then_poll_then_name_and_short_status():
     _, markup = lists._render(state)
     labels = [row[0].text for row in markup.inline_keyboard[:len(state["rows"])]]
     assert all(len(label) <= 72 for label in labels)
-    assert labels[0].startswith("☆ ❌ Дима — ❗ (5/5)")
-    assert labels[1].startswith("☆ ✅ Аня — ∞ (8/15)")
-    assert labels[2].startswith("☆ ❔ Лиза — разово")
-    assert labels[3].startswith("☆ 💵 🆕 @new_parent — новый")
+    assert labels[0].startswith("☐ — ❌ Дима — ❗ (5/5)")
+    assert labels[1].startswith("☐ — ⭐ Аня — ∞ (8/15)")
+    assert labels[2].startswith("☐ — ❔ Лиза — разово")
+    assert labels[3].startswith("☐ — 💵 🆕 @new_parent — новый")
     state["rows"][0]["selected"] = True
     _, markup = lists._render(state)
-    assert markup.inline_keyboard[0][0].text.startswith("⭐ ❌ Дима")
+    assert markup.inline_keyboard[0][0].text.startswith("✅ — ❌ Дима")
 
 
 def test_real_usernames_id_columns_and_adult_repeated_section_headers():
@@ -485,7 +486,7 @@ def test_unpaid_alert_is_not_lost_if_name_is_long():
         "unpaid": "не оплачено 1250",
     }
     label = lists._button_label(row)
-    assert label.startswith("☆ ❔ ")
+    assert label.startswith("☐ — ❔ ")
     assert "❗" in label
     assert "⚠️ не оплачено" in label
     assert len(label) <= 72
@@ -531,3 +532,106 @@ def test_unpaid_without_specified_amount_does_not_invent_cost():
     copied = lists._export(session)
     assert "Лиза (не оплачено)" in copied
     assert "1250" not in copied
+
+
+def test_tick_then_untick_immediately_updates_same_student_and_export(monkeypatch):
+    monkeypatch.setenv("ADMIN_ID", "1")
+    state = sample_snapshot()
+    query = SimpleNamespace(
+        data="", answer=AsyncMock(), edit_message_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=SimpleNamespace(id=1, type="private"),
+        callback_query=query,
+    )
+    context = SimpleNamespace(user_data={lists.SESSION_KEY: state})
+    async def scenario():
+        _, first = lists._render(state)
+        tick = first.inline_keyboard[0][0].callback_data
+        assert tick.endswith(":0:0")
+        query.data = tick
+        await lists.list_callback(update, context)
+        assert state["rows"][0]["selected"] is True
+        assert lists._export(state).startswith("📋")
+        _, second = lists._render(state)
+        untick = second.inline_keyboard[0][0].callback_data
+        assert untick.endswith(":0:1")
+        assert tick != untick
+
+        # A replay of the old button is ignored, even if it arrives as a new update.
+        edits = query.edit_message_text.await_count
+        query.data = tick
+        await lists.list_callback(update, context)
+        assert query.edit_message_text.await_count == edits
+        assert state["rows"][0]["selected"] is True
+
+        # An intentional immediate second tap sees the new callback data.
+        query.data = untick
+        await lists.list_callback(update, context)
+        assert state["rows"][0]["selected"] is False
+        assert lists._export(state) is None
+        assert query.edit_message_text.await_count == edits + 1
+        _, final = lists._render(state)
+        assert final.inline_keyboard[0][0].callback_data == tick
+    asyncio.run(scenario())
+
+
+def test_concurrent_stale_clicks_are_serialized_and_not_double_applied(monkeypatch):
+    monkeypatch.setenv("ADMIN_ID", "1")
+    state = sample_snapshot()
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    edits = []
+
+    async def edit_slow(*args, **kwargs):
+        edits.append((args, kwargs))
+        entered.set()
+        await release.wait()
+
+    query1 = SimpleNamespace(data=f"al:t:{state['id']}:0:0",
+                              answer=AsyncMock(), edit_message_text=AsyncMock(side_effect=edit_slow))
+    query2 = SimpleNamespace(data=query1.data,
+                              answer=AsyncMock(), edit_message_text=AsyncMock())
+    context = SimpleNamespace(user_data={lists.SESSION_KEY: state})
+    def update(q):
+        return SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=1, type="private"),
+            callback_query=q,
+        )
+
+    async def scenario():
+        first = asyncio.create_task(lists.list_callback(update(query1), context))
+        await entered.wait()
+        second = asyncio.create_task(lists.list_callback(update(query2), context))
+        release.set()
+        await asyncio.gather(first, second)
+        assert state["rows"][0]["selected"] is True
+        assert len(edits) == 1
+        query2.edit_message_text.assert_not_awaited()
+    asyncio.run(scenario())
+
+
+def test_failed_edit_rolls_back_attendance_state(monkeypatch):
+    monkeypatch.setenv("ADMIN_ID", "1")
+    state = sample_snapshot()
+    query = SimpleNamespace(
+        data=f"al:t:{state['id']}:0:0",
+        answer=AsyncMock(),
+        edit_message_text=AsyncMock(side_effect=RuntimeError("telegram timeout")),
+    )
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=SimpleNamespace(id=1, type="private"),
+        callback_query=query,
+    )
+    context = SimpleNamespace(user_data={lists.SESSION_KEY: state})
+
+    async def scenario():
+        import pytest
+        with pytest.raises(RuntimeError, match="telegram timeout"):
+            await lists.list_callback(update, context)
+        assert state["rows"][0]["selected"] is False
+        assert lists._export(state) is None
+    asyncio.run(scenario())
