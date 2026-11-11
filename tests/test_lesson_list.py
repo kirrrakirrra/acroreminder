@@ -9,15 +9,15 @@ import lesson_list_handler as lists
 COLUMNS = [
     "Имя", "Группа", "User ID", "username", "Абонемент", "Лимит",
     "Used", "Unused", "Срок Действия", "WO Left until end",
-    "Difference", "warning_7",
+    "Difference", "warning_7", "Депозит",
 ]
 
 
 def student(name, group="6-9 лет начинающие", user_id="", username="", sub="абон 5",
             limit="5", used="2", unused="3", end="20.11.2026",
-            calendar="", difference="", warning=""):
+            calendar="", difference="", warning="", deposit=""):
     return [name, group, user_id, username, sub, limit, used, unused,
-            end, calendar, difference, warning]
+            end, calendar, difference, warning, deposit]
 
 
 def poll_vote(user_id, answer, username="", full_name="Родитель"):
@@ -253,14 +253,18 @@ def test_last_calendar_lesson_today_never_shows_expired():
     assert "закончен" not in status
 
 
-def test_button_labels_show_vote_and_subscription_within_phone_friendly_limit():
+def test_button_labels_have_star_then_poll_then_name_and_short_status():
     state = sample_snapshot()
     _, markup = lists._render(state)
     labels = [row[0].text for row in markup.inline_keyboard[:len(state["rows"])]]
-    assert all(len(label) <= 64 for label in labels)
-    assert "Дима" in labels[0] and "закончен" in labels[0] and "❌" in labels[0]
-    assert "Аня" in labels[1] and "∞" in labels[1] and "✅" in labels[1]
-    assert "Лиза" in labels[2] and "разово" in labels[2]
+    assert all(len(label) <= 72 for label in labels)
+    assert labels[0].startswith("☆ ❌ Дима — ❗ 5 из 5")
+    assert labels[1].startswith("☆ ✅ Аня — ∞ (8 из 15)")
+    assert labels[2].startswith("☆ ❔ Лиза — разово")
+    assert labels[3].startswith("☆ 💵 🆕 @new_parent — новый")
+    state["rows"][0]["selected"] = True
+    _, markup = lists._render(state)
+    assert markup.inline_keyboard[0][0].text.startswith("⭐ ❌ Дима")
 
 
 def test_real_usernames_id_columns_and_adult_repeated_section_headers():
@@ -411,3 +415,77 @@ def test_eleven_primary_and_eleven_secondary_rows_do_not_create_next_page():
     _, keyboard = lists._render(state)
     labels = [button.text for row in keyboard.inline_keyboard for button in row]
     assert not any("Далее" in label for label in labels)
+
+
+
+def test_unlimited_displays_real_used_count_out_of_group_guideline():
+    columns = lists._header(COLUMNS)
+    row = student("Лена", sub="Безлимит", used="7", unused="", calendar="3")
+    for group in lists.GROUPS:
+        status = lists.compact_subscription_status(row, columns, date(2026, 11, 11), group)
+        effective = 15 if group["key"].startswith("69_") else 10
+        assert status == f"∞ (7 из {effective})"
+
+
+def test_expired_pass_keeps_usage_and_red_exclamation():
+    columns = lists._header(COLUMNS)
+    group = lists.GROUPS[2]
+    expired_by_date = student("Дима", sub="Абон 8", limit="8",
+                              used="7", unused="1", end="01.11.2026")
+    exhausted = student("Дима", sub="Абон 8", limit="8",
+                        used="8", unused="0")
+    assert lists.compact_subscription_status(
+        expired_by_date, columns, date(2026, 11, 11), group
+    ) == "❗ 7 из 8 (срок истёк)"
+    assert lists.compact_subscription_status(
+        exhausted, columns, date(2026, 11, 11), group
+    ) == "❗ 8 из 8"
+    last_day = student("Дима", sub="Абон 8", limit="8",
+                       used="7", unused="1", end="11.11.2026")
+    assert "❗" not in lists.compact_subscription_status(
+        last_day, columns, date(2026, 11, 11), group
+    )
+
+
+def test_unpaid_deposit_marks_yellow_and_survives_copy_with_amount():
+    group = dict(lists.GROUPS[3])
+    roster = [COLUMNS,
+              student("Жаркова Майя", group=group["sheet_group"],
+                      sub="Абон 8", limit="8", used="4", unused="4",
+                      deposit="не оплач 1250"),
+              student("Заливохина Дарина", group=group["sheet_group"],
+                      sub="Безлимит", used="5", unused="", deposit=""),
+              student("Стрищенко Глеб", group=group["sheet_group"],
+                      sub="Разово", deposit="не оплач")]
+    state = lists.build_lesson_snapshot(
+        group, date(2026, 11, 11), roster, [], [], [])
+    names = [r["name"] for r in state["rows"]]
+    assert names == ["Жаркова Майя", "Заливохина Дарина", "Стрищенко Глеб"]
+    assert state["rows"][0]["unpaid"] == "не оплачено 1250"
+    assert state["rows"][2]["unpaid"] == "не оплачено"
+    assert "⚠️ не оплачено 1250" in lists._button_label(state["rows"][0])
+    assert "⚠️ не оплачено" in lists._button_label(state["rows"][2])
+    assert "⚠️" not in lists._button_label(state["rows"][1])
+    state["rows"][0]["selected"] = True
+    state["rows"][1]["selected"] = True
+    state["rows"][2]["selected"] = True
+    exported = lists._export(state)
+    assert "1. Жаркова Майя (не оплачено 1250)" in exported
+    assert "2. Заливохина Дарина" in exported
+    assert "3. Стрищенко Глеб (не оплачено)" in exported
+    assert "Оплаты:" not in exported and "Комментарии:" not in exported
+
+
+def test_unpaid_alert_is_not_lost_if_name_is_long():
+    row = {
+        "selected": False, "vote": "❔ нет ответа",
+        "name": "Очень Длинное Имя Со Многими Дополнительными Фамилиями",
+        "status": "unused",
+        "compact_status": "❗ 7 из 8 (срок истёк)",
+        "unpaid": "не оплачено 1250",
+    }
+    label = lists._button_label(row)
+    assert label.startswith("☆ ❔ ")
+    assert "❗" in label
+    assert "⚠️ не оплачено" in label
+    assert len(label) <= 72
