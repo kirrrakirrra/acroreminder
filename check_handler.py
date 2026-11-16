@@ -219,7 +219,7 @@ def build_subscription_message(subscription: dict) -> str:
     unlimited_info = get_unlimited_info(subscription)
     warning_7_text = get_warning_7_text(subscription)
     payment_reminder_text = get_payment_reminder_text(subscription)
-    freeze_text = "\n🧊 *Заморозка:* использована (+7 дней)" if has_used_subscription_freeze(subscription) else ""
+    freeze_text = "🧊 *Заморозка:* использована (+7 дней)\n" if has_used_subscription_freeze(subscription) else ""
     unpaid_payment_text = get_unpaid_payment_text(subscription)
     status = get_subscription_alert_status(subscription)
     logging.info(
