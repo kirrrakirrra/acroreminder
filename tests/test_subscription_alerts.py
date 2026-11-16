@@ -131,3 +131,38 @@ def test_moved_row_resolves_only_by_unique_fingerprint_and_reused_hint_is_safe()
     assert resolve_alert_subscription(
         [reused, moved, duplicate], "Группы 4-5", 3, fingerprint
     ) is None
+
+
+
+def test_used_freeze_appears_in_digest_and_trainer_detail_without_reason():
+    item = subscription()
+    item.update({
+        "comment": "🧊 16.11 приватная причина +7 дней",
+        "start_date": datetime(2026, 10, 20),
+        "end_date": datetime(2026, 11, 30),
+        "start_date_raw": "20/10",
+        "end_date_raw": "30/11",
+        "subscription_type": "sub_5",
+    })
+    grouped = collect_alerts([item], ["Группа A"])
+    digest = render_digest_parts(grouped, "acro_bot")
+    assert any("🧊 заморозка" in message for message in digest)
+    assert all("приватная причина" not in message for message in digest)
+
+    card = build_trainer_alert_card(item, "last_lesson")
+    assert "🧊 <b>Заморозка:</b> использована (+7 дней)" in card
+    assert "приватная причина" not in card
+    # A freeze never becomes its own alert category.
+    assert "freeze" not in grouped
+
+
+def test_other_extension_without_marked_freeze_does_not_change_alerts():
+    item = subscription()
+    item.update({
+        "start_date": datetime(2026, 10, 20),
+        "end_date": datetime(2026, 11, 30),
+        "comment": "16.11 отмена тренировки +7 дней",
+    })
+    digest = render_digest_parts(collect_alerts([item], ["Группа A"]), "acro_bot")
+    assert "🧊" not in " ".join(digest)
+    assert "🧊" not in build_trainer_alert_card(item, "last_lesson")

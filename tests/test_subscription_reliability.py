@@ -379,3 +379,93 @@ def test_unknown_group_does_not_claim_a_group_scoped_lookup(monkeypatch):
     kwargs = context.bot.send_message.await_args.kwargs
     assert "По вашему Telegram-аккаунту" in kwargs["text"]
     assert "reply_markup" not in kwargs
+
+
+
+def test_freeze_status_recognizes_flexible_comment_for_current_pass():
+    base = {
+        "subscription_type": "unlimited",
+        "start_date": datetime(2026, 10, 20),
+        "end_date": datetime(2026, 11, 30),  # 34 + 7 days
+    }
+    for note in (
+        "🧊 16.11 каникулы у детей +7 дней",
+        "🧊 6/11 + 7 болезнь",
+        "🧊 06 / 11 отпуск +7",
+        "🧊 +7 лагерь",
+        "🧊 + 7",
+    ):
+        assert subscription_tools.has_used_subscription_freeze(
+            {**base, "comment": note}
+        ), note
+
+
+def test_freeze_status_requires_explicit_marker_and_real_extension():
+    base = {
+        "subscription_type": "sub_8",
+        "start_date": datetime(2026, 11, 6),
+        "end_date": datetime(2026, 12, 17),  # 34 + 7 days
+    }
+    assert subscription_tools.has_used_subscription_freeze({
+        **base, "comment": "🧊 16.11 отпуск +7 дней",
+    })
+    for note in (
+        "16.11 отпуск +7 дней",
+        "7.09 +7 дней",
+        "🧊 16.11 отпуск",
+        "🧊 +70",
+        "",
+    ):
+        assert not subscription_tools.has_used_subscription_freeze({
+            **base, "comment": note,
+        }), note
+    assert not subscription_tools.has_used_subscription_freeze({
+        **base, "end_date": datetime(2026, 12, 10),
+        "comment": "🧊 16.11 отпуск +7 дней",
+    })
+    assert not subscription_tools.has_used_subscription_freeze({
+        **base, "subscription_type": "drop_in", "comment": "🧊 +7",
+    })
+
+
+def test_old_dated_freeze_comment_does_not_apply_to_new_pass():
+    # G is not always cleared between passes. Do not flag an old note.
+    sub = {
+        "subscription_type": "sub_8",
+        "start_date": datetime(2026, 11, 9),
+        "end_date": datetime(2026, 12, 20),
+        "comment": "🧊 7.09 +7 дней",
+    }
+    assert not subscription_tools.has_used_subscription_freeze(sub)
+
+
+def test_freeze_date_can_cross_year_and_trial_uses_shorter_term():
+    assert subscription_tools.has_used_subscription_freeze({
+        "subscription_type": "unlimited",
+        "start_date": datetime(2026, 12, 20),
+        "end_date": datetime(2027, 1, 30),
+        "comment": "🧊 04.01 отпуск +7",
+    })
+    assert subscription_tools.has_used_subscription_freeze({
+        "subscription_type": "sub_3_trial",
+        "start_date": datetime(2026, 11, 6),
+        "end_date": datetime(2026, 12, 3),  # 20 + 7 days
+        "comment": "🧊 16.11 +7 дней",
+    })
+
+
+def test_parent_check_shows_freeze_without_private_comment(monkeypatch):
+    handler = import_check_handler(monkeypatch)
+    item = real_subscription()
+    item.update({
+        "comment": "🧊 16.11 секретная причина +7 дней",
+        "start_date": datetime(2026, 11, 6),
+        "end_date": datetime(2026, 12, 17),
+    })
+    frozen = handler.build_subscription_message(item)
+    assert "🧊 *Заморозка:* использована (+7 дней)" in frozen
+    assert "секретная причина" not in frozen
+    assert "📅 *Даты посещений:*" in frozen
+    item["end_date"] = datetime(2026, 12, 10)
+    normal = handler.build_subscription_message(item)
+    assert "Заморозка:" not in normal

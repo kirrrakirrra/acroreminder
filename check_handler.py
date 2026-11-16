@@ -12,6 +12,7 @@ from subscription_tools import (
     load_all_subscriptions,
     find_user_subscriptions,
     format_usage,
+    has_used_subscription_freeze,
     is_finished,
     get_subscription_alert_status,
     parse_unpaid_payment,
@@ -218,6 +219,7 @@ def build_subscription_message(subscription: dict) -> str:
     unlimited_info = get_unlimited_info(subscription)
     warning_7_text = get_warning_7_text(subscription)
     payment_reminder_text = get_payment_reminder_text(subscription)
+    freeze_text = "🧊 *Заморозка:* использована (+7 дней)\n" if has_used_subscription_freeze(subscription) else ""
     unpaid_payment_text = get_unpaid_payment_text(subscription)
     status = get_subscription_alert_status(subscription)
     logging.info(
@@ -234,6 +236,7 @@ def build_subscription_message(subscription: dict) -> str:
         f"🧾 *Абонемент:* `{sub_type}`\n"
         f"📆 *Срок действия:* `{start} — {end}`\n"
         f"✅ *Использовано:* `{usage_text}`\n"
+        f"{freeze_text}"
         f"📅 *Даты посещений:*\n{dates_text}"
         f"{limited_warning}"
         f"{unlimited_info}"

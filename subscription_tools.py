@@ -310,6 +310,57 @@ def is_expired(subscription: Dict[str, Any], today: Optional[datetime] = None) -
     return end_date.date() < today.date() and not is_finished(subscription)
 
 
+
+# The owner records an optional freeze in the existing G/«Коммент» cell:
+# «🧊 16.11 каникулы +7 дней», «🧊 6/11 + 7» or simply «🧊 +7».
+# The emoji is intentional: old free-text notes such as «7.09 +7 дней»
+# may belong to a previous subscription. No extra Sheets read is required.
+FREEZE_DAYS_PATTERN = re.compile(r"\+\s*7(?!\d)")
+FREEZE_NOTE_DATE_PATTERN = re.compile(r"(?<!\d)(\d{1,2})\s*[./-]\s*(\d{1,2})(?!\d)")
+
+
+def has_used_subscription_freeze(subscription: Dict[str, Any]) -> bool:
+    """Show a freeze only for a marked, actually extended current pass."""
+    comment = str(subscription.get("comment") or "")
+    if "🧊" not in comment or not FREEZE_DAYS_PATTERN.search(comment):
+        return False
+
+    sub_type = subscription.get("subscription_type")
+    if sub_type not in {"unlimited", "sub_8", "sub_5", "sub_3_trial"}:
+        return False
+
+    start = subscription.get("start_date")
+    end = subscription.get("end_date")
+    if not isinstance(start, datetime):
+        start = parse_date(str(subscription.get("start_date_raw") or ""))
+    if not isinstance(end, datetime):
+        end = parse_date(str(subscription.get("end_date_raw") or ""))
+    if start is None or end is None:
+        return False
+
+    # M+34 / M+20 are the ordinary end-date formulas in the current Sheet.
+    # +7 is the freeze; other +1/+2 calendar corrections may coexist.
+    standard_days = 20 if sub_type == "sub_3_trial" else 34
+    if (end.date() - start.date()).days < standard_days + 7:
+        return False
+
+    # An old comment may remain in G after a new subscription starts.
+    # If the optional date is present, it must belong to this subscription;
+    # the year is inferred from M–N, never required in the note.
+    note_dates = FREEZE_NOTE_DATE_PATTERN.findall(comment)
+    if note_dates:
+        for day_text, month_text in note_dates:
+            for year in range(start.year, end.year + 1):
+                try:
+                    noted = datetime(year, int(month_text), int(day_text)).date()
+                except ValueError:
+                    continue
+                if start.date() <= noted <= end.date():
+                    return True
+        return False
+
+    return True
+
 def format_usage(subscription: Dict[str, Any]) -> str:
     used = subscription.get("used", 0)
 
