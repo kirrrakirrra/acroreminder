@@ -10,6 +10,7 @@ from urllib.parse import quote
 from subscription_tools import (
     SUBSCRIPTION_SHEETS,
     format_usage,
+    has_used_subscription_freeze,
     get_subscription_alert_status,
     is_started_subscription,
     parse_unpaid_payment,
@@ -138,12 +139,14 @@ def resolve_alert_subscription(subscriptions: Iterable[Dict], sheet_name: str,
 
 def _context(subscription: Dict, alert_type: str) -> str:
     if alert_type == "unpaid":
-        return parse_unpaid_payment(subscription.get("deposit")) or "не оплачено"
-    if alert_type in {"finished", "last_lesson", "no_calendar_lessons",
-                      "last_calendar_lesson_today", "last_calendar_lesson"}:
-        return format_usage(subscription)
-    end = str(subscription.get("end_date_raw", "")).strip()
-    return f"до {end}" if end else "срок требует внимания"
+        base = parse_unpaid_payment(subscription.get("deposit")) or "не оплачено"
+    elif alert_type in {"finished", "last_lesson", "no_calendar_lessons",
+                        "last_calendar_lesson_today", "last_calendar_lesson"}:
+        base = format_usage(subscription)
+    else:
+        end = str(subscription.get("end_date_raw", "")).strip()
+        base = f"до {end}" if end else "срок требует внимания"
+    return f"{base} · 🧊 заморозка" if has_used_subscription_freeze(subscription) else base
 
 
 def _digest_row(subscription: Dict, alert_type: str, bot_username: str,
@@ -233,6 +236,8 @@ def build_trainer_alert_card(subscription: Dict, alert_type: str) -> str:
         f"☑️ <b>Использовано:</b> {html.escape(format_usage(subscription))}",
         f"📅 <b>Даты посещений:</b>\n{dates}",
     ]
+    if has_used_subscription_freeze(subscription):
+        lines.append("🧊 <b>Заморозка:</b> использована (+7 дней)")
     lines.append(f"\n{html.escape(ALERT_EXPLANATIONS[alert_type])}")
     if alert_type == "warning_7" and subscription.get("days_until_end"):
         lines.append(f"⏳ Осталось дней: {html.escape(str(subscription['days_until_end']))}")
