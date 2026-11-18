@@ -424,7 +424,6 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = update.effective_user
-    await notify_karina_action(context, user, "⚠️ /expired")
     full_name = update.effective_user.full_name
     username = update.effective_user.username or ""
     logging.info(f"/expired used by {full_name} (@{username}) [ID: {user_id}]")
@@ -448,6 +447,7 @@ async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today_groups = [g for g in today_groups if g]
 
     pending = await start_progress(update.message)
+    await notify_karina_action(context, user, "⚠️ /expired")
     try:
         await check_expired_subscriptions(context.application, today_groups)
         await finish_progress(
