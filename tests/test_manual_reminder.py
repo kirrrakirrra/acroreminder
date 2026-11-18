@@ -603,3 +603,26 @@ def test_legacy_duplicate_rows_choose_latest_for_reports(monkeypatch):
     ]
     canonical = handler.canonical_report_rows(rows, "2026-09-08")
     assert [row[0] for row in canonical] == ["new", "other"]
+
+
+
+def test_reminder_confirmation_shows_separate_progress_without_touching_source_message(monkeypatch):
+    handler = load_scheduler(monkeypatch)
+    freeze_before_lesson(monkeypatch, handler)
+    sheet_rows(handler, [])
+    ctx = context()
+    callback = update(1, "select_reminder|0|2026-09-08", message_id=123, chat_id=1)
+    callback.effective_chat = SimpleNamespace(id=1, type="private")
+
+    asyncio.run(handler.handle_callback(callback, ctx))
+
+    # One separate progress message and one real announcement to the group.
+    assert ctx.bot.send_message.await_count == 2
+    progress_kwargs = ctx.bot.send_message.await_args_list[0].kwargs
+    assert progress_kwargs["chat_id"] == 1
+    assert progress_kwargs["text"] == "⏳ Собираю информацию…"
+    ctx.bot.send_message.return_value.delete.assert_awaited_once()
+    assert ctx.bot.send_poll.await_count == 1
+    assert callback.callback_query.edit_message_text.await_args.args[0] == (
+        "Напоминание и опрос отправлены ✅"
+    )
