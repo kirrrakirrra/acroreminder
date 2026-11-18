@@ -12,6 +12,7 @@ from subscription_tools import (
     parse_unpaid_payment,
 )
 from subscription_alerts import collect_alerts, render_digest_parts
+from progress_message import start_callback_progress, complete_callback_progress
 import asyncio
 import os
 import logging
@@ -131,46 +132,51 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     if action in ("yes", "select_reminder", "resend_reminder"):
-        occurrence = (group["name"], str(lesson_date))
-        async with occurrence_locks[occurrence]:
-            marker = _fresh_confirmation_marker(query, occurrence)
-            is_fresh_scheduler_yes = (
-                action == "yes" and fresh_scheduler_confirmations.pop(marker, None) is not None
-            )
-            already_sent = occurrence in in_process_sent_occurrences
-            if action in ("yes", "select_reminder") and not already_sent and not is_fresh_scheduler_yes:
-                already_sent = await occurrence_was_sent_async(group, lesson_date)
-            if action in ("yes", "select_reminder") and already_sent:
-                await query.edit_message_text(
-                    "⚠️ Напоминание и опрос для этого занятия уже отправлены. "
-                    "Повторная отправка создаст ещё одно сообщение и опрос.",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔁 Отправить заново", callback_data=f"resend_reminder|{group_id}|{lesson_date}")],
-                        [InlineKeyboardButton("Отмена", callback_data="cancel_reminder")],
-                    ]),
-                )
-                return
-            async def show_delivered_progress():
-                try:
-                    await query.edit_message_text(
-                        "Напоминание и опрос отправлены ✅\nСохраняю данные…"
-                    )
-                except TelegramError:
-                    # A stale/deleted trainer message must not prevent the durable
-                    # marker from being written after a successful group delivery.
-                    logging.exception("Could not show reminder persistence progress")
-
-            result = await send_reminder_and_poll(
-                context, group, lesson_date, replace=action == "resend_reminder",
-                on_poll_sent=show_delivered_progress,
-            )
+        pending = await start_callback_progress(update, context)
         try:
-            await query.edit_message_text(result.admin_message)
-        except BadRequest as exc:
-            if "message is not modified" in str(exc).lower():
-                logging.info("Trainer delivery status was already up to date: %s", exc)
-            else:
-                raise
+            occurrence = (group["name"], str(lesson_date))
+            async with occurrence_locks[occurrence]:
+                marker = _fresh_confirmation_marker(query, occurrence)
+                is_fresh_scheduler_yes = (
+                    action == "yes" and fresh_scheduler_confirmations.pop(marker, None) is not None
+                )
+                already_sent = occurrence in in_process_sent_occurrences
+                if action in ("yes", "select_reminder") and not already_sent and not is_fresh_scheduler_yes:
+                    already_sent = await occurrence_was_sent_async(group, lesson_date)
+                if action in ("yes", "select_reminder") and already_sent:
+                    await query.edit_message_text(
+                        "⚠️ Напоминание и опрос для этого занятия уже отправлены. "
+                        "Повторная отправка создаст ещё одно сообщение и опрос.",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("🔁 Отправить заново", callback_data=f"resend_reminder|{group_id}|{lesson_date}")],
+                            [InlineKeyboardButton("Отмена", callback_data="cancel_reminder")],
+                        ]),
+                    )
+                    return
+                async def show_delivered_progress():
+                    try:
+                        await query.edit_message_text(
+                            "Напоминание и опрос отправлены ✅\nСохраняю данные…"
+                        )
+                    except TelegramError:
+                        # A stale/deleted trainer message must not prevent the durable
+                        # marker from being written after a successful group delivery.
+                        logging.exception("Could not show reminder persistence progress")
+
+                result = await send_reminder_and_poll(
+                    context, group, lesson_date, replace=action == "resend_reminder",
+                    on_poll_sent=show_delivered_progress,
+                )
+            try:
+                await query.edit_message_text(result.admin_message)
+            except BadRequest as exc:
+                if "message is not modified" in str(exc).lower():
+                    logging.info("Trainer delivery status was already up to date: %s", exc)
+                else:
+                    raise
+
+        finally:
+            await complete_callback_progress(pending)
     elif action == "skip":
         occurrence = (group["name"], str(lesson_date))
         fresh_scheduler_confirmations.pop(
