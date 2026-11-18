@@ -83,7 +83,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             build_trainer_alert_card(subscription, alert_type), parse_mode="HTML"
         )
         return
-    await save_user_if_new(user.id, user.username, user.full_name)
+    # A greeting does not depend on Sheets: send it before slow user persistence.
     await update.message.reply_text(
     "Привет! 👋\n\n"
     "Здесь ты можешь:\n"
@@ -91,6 +91,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "ℹ️ Получить информацию о ценах, расписании, правилах подготовки, абонементах и индивидуальных занятиях через команду /info\n\n"
     "Если у тебя есть предложения по улучшению или возникли вопросы — напиши тренеру. Мы на связи 😊"
 )
+    await save_user_if_new(user.id, user.username, user.full_name)
 
 def get_start_handler():
     return CommandHandler("start", start_command)
