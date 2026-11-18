@@ -9,6 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from datetime import datetime, timedelta
 from report_rows import canonical_report_rows
+from progress_message import start_callback_progress, complete_callback_progress
 
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
@@ -413,6 +414,8 @@ async def send_admin_report(app, poll_id, report_message_id=None, ping_message_i
 async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer(cache_time=1)
+    pending = await start_callback_progress(update, context)
+    error_message = None
     _, poll_id = query.data.split("|")
     user = update.effective_user
     await notify_karina_action(context, user, f"🔄 Обновление отчёта\npoll_id={poll_id}")
@@ -479,11 +482,15 @@ async def refresh_report_callback(update: Update, context: ContextTypes.DEFAULT_
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в refresh_report_callback: {e}")
+        error_message = "❌ Не удалось обновить отчёт. Попробуйте ещё раз."
+    finally:
+        await complete_callback_progress(pending, error_message)
 
 # Отправляем пинг сообщение в группу
 async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer(cache_time=1)
+    pending = await start_callback_progress(update, context)
 
     def safe_int(value):
         text = str(value).strip() if value is not None else ""
@@ -544,3 +551,5 @@ async def notify_parents_callback(update: Update, context: ContextTypes.DEFAULT_
             await query.edit_message_text("❌ Ошибка при отправке сообщения в группу.")
         except Exception:
             pass
+    finally:
+        await complete_callback_progress(pending)
