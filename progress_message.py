@@ -40,10 +40,7 @@ async def start_callback_progress(update, context, text=PROGRESS_TEXT):
     chat = getattr(update, "effective_chat", None)
     message = getattr(getattr(update, "callback_query", None), "message", None)
     chat_id = getattr(chat, "id", None)
-    if chat_id is None:
-        chat_id = getattr(message, "chat_id", None)
-    if chat_id is None:
-        chat_id = getattr(getattr(message, "chat", None), "id", None)
+    # Inline messages and unbound callback updates have no safe target chat.
     if chat_id is None:
         return None
 
