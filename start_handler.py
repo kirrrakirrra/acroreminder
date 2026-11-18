@@ -8,6 +8,7 @@ import asyncio
 from sheets_runtime import run_sheets
 
 from subscription_tools import load_all_subscriptions
+from progress_message import start_progress, finish_progress
 from subscription_alerts import (
     alert_still_applies,
     build_trainer_alert_card,
@@ -64,19 +65,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(unavailable)
             return
         sheet_name, row_number, alert_type, fingerprint = parsed
+        pending = await start_progress(update.message)
         try:
             subscriptions = await asyncio.to_thread(load_all_subscriptions, [sheet_name])
         except Exception:
             logging.exception("Не удалось разрешить alert deep link")
-            await update.message.reply_text(unavailable)
+            await finish_progress(update.message, pending, unavailable)
             return
         subscription = resolve_alert_subscription(
             subscriptions, sheet_name, row_number, fingerprint
         )
         if not subscription or not alert_still_applies(subscription, alert_type):
-            await update.message.reply_text(unavailable)
+            await finish_progress(update.message, pending, unavailable)
             return
-        await update.message.reply_text(
+        await finish_progress(
+            update.message, pending,
             build_trainer_alert_card(subscription, alert_type), parse_mode="HTML"
         )
         return
