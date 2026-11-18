@@ -67,3 +67,17 @@ async def clear_callback_progress(pending, *, fallback="✅ Готово"):
             await pending.edit_text(fallback)
         except Exception:
             logging.debug("Could not finalize Telegram callback progress", exc_info=True)
+
+
+
+async def complete_callback_progress(pending, error=None):
+    """On success remove the placeholder; on failure keep an actionable error."""
+    if pending is None:
+        return
+    if error:
+        try:
+            await pending.edit_text(error)
+            return
+        except Exception:
+            logging.warning("Could not show callback error", exc_info=True)
+    await clear_callback_progress(pending, fallback=error or "✅ Готово")
