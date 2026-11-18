@@ -6,6 +6,7 @@ import logging
 import datetime
 import time
 from utils import notify_karina_action
+from progress_message import start_progress, finish_progress
 from group_config import GROUP_NAME_MAP, GROUPS
 from scheduler_handler import check_expired_subscriptions, groups
 from subscription_tools import (
@@ -423,7 +424,6 @@ async def check_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = update.effective_user
-    await notify_karina_action(context, user, "⚠️ /expired")
     full_name = update.effective_user.full_name
     username = update.effective_user.username or ""
     logging.info(f"/expired used by {full_name} (@{username}) [ID: {user_id}]")
@@ -446,5 +446,15 @@ async def expired_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     today_groups = [g for g in today_groups if g]
 
-    await check_expired_subscriptions(context.application, today_groups)
-    await update.message.reply_text("✅ Проверка завершённых абонементов выполнена.")
+    pending = await start_progress(update.message)
+    await notify_karina_action(context, user, "⚠️ /expired")
+    try:
+        await check_expired_subscriptions(context.application, today_groups)
+        await finish_progress(
+            update.message, pending, "✅ Проверка завершённых абонементов выполнена."
+        )
+    except Exception:
+        logging.exception("Ошибка выполнения /expired")
+        await finish_progress(
+            update.message, pending, "❌ Не удалось проверить абонементы. Попробуйте снова."
+        )

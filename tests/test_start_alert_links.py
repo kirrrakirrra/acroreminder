@@ -54,10 +54,11 @@ def test_admin_and_karina_can_open_current_alert_card(monkeypatch, user_id):
         request, SimpleNamespace(args=[make_alert_payload(item, "last_lesson")])
     ))
 
-    text = request.message.reply_text.await_args.args[0]
-    assert "Анна" in text
-    assert "не оплачено 400" in text
-    assert request.message.reply_text.await_args.kwargs["parse_mode"] == "HTML"
+    assert request.message.reply_text.await_args.args[0] == "⏳ Собираю информацию…"
+    result = request.message.reply_text.return_value.edit_text
+    assert "Анна" in result.await_args.args[0]
+    assert "не оплачено 400" in result.await_args.args[0]
+    assert result.await_args.kwargs["parse_mode"] == "HTML"
 
 
 def test_unauthorized_and_stale_links_do_not_expose_card(monkeypatch):
@@ -76,7 +77,8 @@ def test_unauthorized_and_stale_links_do_not_expose_card(monkeypatch):
     item["unused"] = 2
     stale = update(1)
     asyncio.run(handler.start_command(stale, SimpleNamespace(args=[payload])))
-    assert stale.message.reply_text.await_args.args[0] == (
+    assert stale.message.reply_text.await_args.args[0] == "⏳ Собираю информацию…"
+    assert stale.message.reply_text.return_value.edit_text.await_args.args[0] == (
         "Карточка недоступна или ситуация уже изменилась."
     )
 
@@ -91,3 +93,38 @@ def test_old_or_malformed_alert_prefix_does_not_enter_alert_flow(monkeypatch):
 
     save.assert_awaited_once()
     assert request.message.reply_text.await_args.args[0].startswith("Привет!")
+
+
+
+def test_trainer_alert_shows_progress_before_sheets_load(monkeypatch):
+    handler = import_handler(monkeypatch)
+    item = subscription()
+    request = update(1)
+
+    async def delayed_load(loader, sheet_names):
+        assert request.message.reply_text.await_count == 1
+        assert request.message.reply_text.await_args.args[0] == "⏳ Собираю информацию…"
+        return [item]
+
+    monkeypatch.setattr(handler.asyncio, "to_thread", delayed_load)
+    asyncio.run(handler.start_command(
+        request, SimpleNamespace(args=[make_alert_payload(item, "last_lesson")])
+    ))
+    request.message.reply_text.return_value.edit_text.assert_awaited_once()
+
+
+def test_failed_trainer_alert_replaces_progress_with_unavailable(monkeypatch):
+    handler = import_handler(monkeypatch)
+    item = subscription()
+
+    def broken_loader(_sheet_names):
+        raise RuntimeError("Sheets unavailable")
+
+    monkeypatch.setattr(handler, "load_all_subscriptions", broken_loader)
+    request = update(1)
+    asyncio.run(handler.start_command(
+        request, SimpleNamespace(args=[make_alert_payload(item, "last_lesson")])
+    ))
+    assert request.message.reply_text.return_value.edit_text.await_args.args[0] == (
+        "Карточка недоступна или ситуация уже изменилась."
+    )

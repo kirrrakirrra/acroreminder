@@ -8,6 +8,7 @@ import asyncio
 from sheets_runtime import run_sheets
 
 from subscription_tools import load_all_subscriptions
+from progress_message import start_progress, finish_progress
 from subscription_alerts import (
     alert_still_applies,
     build_trainer_alert_card,
@@ -64,23 +65,25 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(unavailable)
             return
         sheet_name, row_number, alert_type, fingerprint = parsed
+        pending = await start_progress(update.message)
         try:
             subscriptions = await asyncio.to_thread(load_all_subscriptions, [sheet_name])
         except Exception:
             logging.exception("Не удалось разрешить alert deep link")
-            await update.message.reply_text(unavailable)
+            await finish_progress(update.message, pending, unavailable)
             return
         subscription = resolve_alert_subscription(
             subscriptions, sheet_name, row_number, fingerprint
         )
         if not subscription or not alert_still_applies(subscription, alert_type):
-            await update.message.reply_text(unavailable)
+            await finish_progress(update.message, pending, unavailable)
             return
-        await update.message.reply_text(
+        await finish_progress(
+            update.message, pending,
             build_trainer_alert_card(subscription, alert_type), parse_mode="HTML"
         )
         return
-    await save_user_if_new(user.id, user.username, user.full_name)
+    # A greeting does not depend on Sheets: send it before slow user persistence.
     await update.message.reply_text(
     "Привет! 👋\n\n"
     "Здесь ты можешь:\n"
@@ -88,6 +91,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "ℹ️ Получить информацию о ценах, расписании, правилах подготовки, абонементах и индивидуальных занятиях через команду /info\n\n"
     "Если у тебя есть предложения по улучшению или возникли вопросы — напиши тренеру. Мы на связи 😊"
 )
+    await save_user_if_new(user.id, user.username, user.full_name)
 
 def get_start_handler():
     return CommandHandler("start", start_command)

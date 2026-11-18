@@ -469,3 +469,23 @@ def test_parent_check_shows_freeze_without_private_comment(monkeypatch):
     item["end_date"] = datetime(2026, 12, 10)
     normal = handler.build_subscription_message(item)
     assert "Заморозка:" not in normal
+
+
+
+def test_admin_expired_shows_progress_then_completion(monkeypatch):
+    handler = import_check_handler(monkeypatch)
+    checker = AsyncMock()
+    monkeypatch.setattr(handler, "check_expired_subscriptions", checker)
+    monkeypatch.setattr(handler, "notify_karina_action", AsyncMock())
+    update = make_update(1, "private")
+    update.effective_user.id = 1
+    update.message = SimpleNamespace(reply_text=AsyncMock())
+    context = SimpleNamespace(application=SimpleNamespace(), bot=SimpleNamespace())
+
+    asyncio.run(handler.expired_command(update, context))
+
+    checker.assert_awaited_once()
+    update.message.reply_text.assert_awaited_once_with("⏳ Собираю информацию…")
+    update.message.reply_text.return_value.edit_text.assert_awaited_once_with(
+        "✅ Проверка завершённых абонементов выполнена."
+    )

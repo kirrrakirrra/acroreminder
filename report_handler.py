@@ -3,6 +3,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 from sheets_runtime import run_sheets
+from progress_message import start_progress, finish_progress
 from utils import format_now, notify_karina_action  # ⬅️ у тебя уже есть локализованное время
 from reminder_handler import send_admin_report, poll_to_group
 from report_rows import canonical_report_rows, recover_missing_report_occurrences
@@ -24,7 +25,6 @@ def is_authorized(user_id: int) -> bool:
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = update.effective_user
-    await notify_karina_action(context, user, "📊 /report")
     full_name = update.effective_user.full_name
     username = update.effective_user.username or ""
     logging.info(f"/report used by {full_name} (@{username}) [ID: {user_id}]")
@@ -33,6 +33,9 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⛔ Эта команда доступна только администратору.\n"
             "Для проверки абонемента воспользуйтесь командой /check.")
         return
+
+    pending = await start_progress(update.message)
+    await notify_karina_action(context, user, "📊 /report")
 
     try:
         today = format_now().split(" ")[0]  # формат: "2025-11-06"
@@ -47,7 +50,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         today_rows = canonical_report_rows(rows, today)
 
         if not today_rows:
-            await update.message.reply_text("ℹ️ Нет репортов на сегодня в таблице Репорты.")
+            await finish_progress(update.message, pending, "ℹ️ Нет репортов на сегодня в таблице Репорты.")
             return
 
         def safe_int(value):
@@ -75,8 +78,8 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             count += 1
 
-        await update.message.reply_text(f"✅ Отчёты обработаны.")
+        await finish_progress(update.message, pending, "✅ Отчёты обработаны.")
 
     except Exception as e:
         logging.warning(f"❗ Ошибка в report_command: {e}")
-        await update.message.reply_text("❌ Ошибка при выполнении команды /report")
+        await finish_progress(update.message, pending, "❌ Ошибка при выполнении команды /report")
