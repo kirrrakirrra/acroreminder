@@ -158,6 +158,10 @@ def test_manual_report_recovers_then_sends_new_messages(monkeypatch):
         app=context.application, poll_id="poll",
         report_message_id=None, ping_message_id=None,
     )
+    update.message.reply_text.assert_awaited_once_with("⏳ Собираю информацию…")
+    update.message.reply_text.return_value.edit_text.assert_awaited_once_with(
+        "✅ Отчёты обработаны."
+    )
 
 
 def test_scheduled_report_recovers_before_rendering(monkeypatch):
@@ -176,3 +180,34 @@ def test_scheduled_report_recovers_before_rendering(monkeypatch):
     send.assert_awaited_once()
     assert send.await_args.kwargs["report_message_id"] is None
     assert send.await_args.kwargs["ping_message_id"] is None
+
+
+
+def test_report_no_results_replaces_progress(monkeypatch):
+    handler = load_report_handler(monkeypatch)
+    monkeypatch.setattr(handler, "format_now", lambda: "2026-09-08 12:00:00")
+    monkeypatch.setattr(handler, "recover_missing_report_occurrences", AsyncMock(return_value=[]))
+    monkeypatch.setattr(handler, "notify_karina_action", AsyncMock())
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=1, full_name="Admin", username="admin"),
+        message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+    asyncio.run(handler.report_command(
+        update, SimpleNamespace(application=Mock())
+    ))
+    update.message.reply_text.return_value.edit_text.assert_awaited_once_with(
+        "ℹ️ Нет репортов на сегодня в таблице Репорты."
+    )
+
+
+def test_unauthorized_report_does_not_show_loading(monkeypatch):
+    handler = load_report_handler(monkeypatch)
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=99, full_name="Parent", username="parent"),
+        message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+    asyncio.run(handler.report_command(
+        update, SimpleNamespace(application=Mock())
+    ))
+    assert "⛔" in update.message.reply_text.await_args.args[0]
+    update.message.reply_text.return_value.edit_text.assert_not_awaited()
